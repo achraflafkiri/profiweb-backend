@@ -48,7 +48,10 @@ const passport = async (user, res) => {
         isVerified: user.isVerified,
         lastLogin: user.lastLogin,
         createdAt: user.createdAt,
-        updatedAt: user.updatedAt
+        updatedAt: user.updatedAt,
+        updatedAt: user.updatedAt,
+        latitude: user.latitude,
+        longitude: user.longitude
       }
     });
   } catch (error) {
@@ -153,20 +156,20 @@ const register = catchAsync(async (req, res, next) => {
     await passport(user, res);
   } catch (error) {
     console.error(error);
-    
+
     // Handle mongoose validation errors
     if (error.name === 'ValidationError') {
       const errors = Object.values(error.errors).map(err => err.message);
       return next(new AppError(`Validation Error: ${errors.join('. ')}`, 400));
     }
-    
+
     // Handle duplicate key errors
     if (error.code === 11000) {
       const field = Object.keys(error.keyValue)[0];
       const value = error.keyValue[field];
       return next(new AppError(`${field.charAt(0).toUpperCase() + field.slice(1)} '${value}' already exists`, 400));
     }
-    
+
     next(error);
   }
 });
@@ -285,14 +288,14 @@ const sendCode = async (req, res, next) => {
     });
   } catch (error) {
     console.error(error);
-    
+
     // Reset the verification code if email fails
     // if (user) {
     //   user.verificationCode = undefined;
     //   user.verificationCodeExpires = undefined;
     //   await user.save({ validateBeforeSave: false });
     // }
-    
+
     return next(new AppError('There was an error sending the email. Please try again later.', 500));
   }
 }
@@ -307,7 +310,7 @@ const verifyCode = async (req, res, next) => {
       return next(new AppError("Email and code are required", 400));
     }
 
-    const user = await User.findOne({ 
+    const user = await User.findOne({
       email,
       verificationCode: code,
       verificationCodeExpires: { $gt: Date.now() }
@@ -347,7 +350,7 @@ const resetPassword = async (req, res, next) => {
 
     // Verify the temporary token
     const decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
-    
+
     if (decoded.purpose !== 'password_reset') {
       return next(new AppError("Invalid token purpose", 400));
     }
@@ -381,9 +384,9 @@ const resetPassword = async (req, res, next) => {
 
 // Don't forget to export the new functions
 module.exports = {
-  sendCode, 
-  verifyCode, 
-  resetPassword ,
+  sendCode,
+  verifyCode,
+  resetPassword,
   login,
   register
 };

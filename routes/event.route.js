@@ -1,3 +1,4 @@
+// routes/event.route.js
 const express = require('express');
 const router = express.Router();
 const protect = require('../middlewares/protect');
@@ -14,26 +15,27 @@ const {
     leaveEvent,
     getAllEventsByUser,
     deleteEventById,
+    getEventsNearLocation,
+    getEventsByDistance, // ✨ NEW: Import the new function
 } = require('../controllers/eventController');
 
-// ⚠️ ORDRE TRÈS IMPORTANT !
-// Les routes SPÉCIFIQUES doivent venir AVANT les routes avec paramètres dynamiques
-
 // Public routes (no authentication needed)
-router.get('/types', getAllEventTypes);  // Spécifique - doit venir en premier
+router.get('/types', getAllEventTypes);
+router.get('/nearby', getEventsNearLocation);
+router.get('/distance', getEventsByDistance); // ✨ NEW: Filter by distance
 router.get('/', getAllEvents);
 
 // Protected routes (require authentication)
-router.use(protect); // All routes below require authentication
+router.use(protect);
 
-// User's events - DOIT venir AVANT /:eventId
-router.get('/users', getAllEventsByUser);  // ✅ Route spécifique AVANT
+// User's events
+router.get('/users', getAllEventsByUser);
 
 // Event creation and management
 router.post('/', AddEvent);
 
-// Event by ID - DOIT venir APRÈS les routes spécifiques
-router.get('/:eventId', getEventById);  // ✅ Route paramétrée APRÈS
+// Event by ID
+router.get('/:eventId', getEventById);
 router.put('/:eventId', updateEvent);
 router.delete('/:eventId', deleteEventById);
 
@@ -41,7 +43,7 @@ router.delete('/:eventId', deleteEventById);
 router.post('/:eventId/join', joinToEvent);
 router.post('/:eventId/leave', leaveEvent);
 
-// Organizer management (approval/rejection/removal)
+// Organizer management
 router.post('/:eventId/approve/:userId', approveParticipant);
 router.post('/:eventId/reject/:userId', rejectParticipant);
 router.delete('/:eventId/participant/:userId', removeParticipant);

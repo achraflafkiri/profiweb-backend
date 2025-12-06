@@ -19,6 +19,7 @@ const AddEvent = catchAsync(async (req, res, next) => {
         endTime,
         city,
         address,
+        location, // ✨ NEW: location field
         maxParticipants,
         contactInfo,
         additionalNotes,
@@ -30,6 +31,27 @@ const AddEvent = catchAsync(async (req, res, next) => {
 
     console.log("registrationType", registrationType);
     console.log("childAgeGroups received:", childAgeGroups);
+    console.log("location received:", location); // ✨ NEW: log location
+
+    // ✨ NEW: Validate location coordinates
+    if (!location || !location.coordinates || !Array.isArray(location.coordinates) || location.coordinates.length !== 2) {
+        return next(new AppError('Les coordonnées de localisation sont requises. Format attendu: { coordinates: [longitude, latitude] }', 400));
+    }
+
+    const [longitude, latitude] = location.coordinates;
+    
+    // ✨ NEW: Validate coordinate ranges
+    if (typeof longitude !== 'number' || typeof latitude !== 'number') {
+        return next(new AppError('Les coordonnées doivent être des nombres', 400));
+    }
+    
+    if (longitude < -180 || longitude > 180) {
+        return next(new AppError(`Longitude invalide: ${longitude}. Doit être entre -180 et 180`, 400));
+    }
+    
+    if (latitude < -90 || latitude > 90) {
+        return next(new AppError(`Latitude invalide: ${latitude}. Doit être entre -90 et 90`, 400));
+    }
 
     // Convert string dates/times to Date objects
     const startDateObj = new Date(startDate);
@@ -55,14 +77,14 @@ const AddEvent = catchAsync(async (req, res, next) => {
         finalOutdoorActivity = undefined;
     }
 
-    // In AddEvent controller, add this validation:
+    // Validate registration type
     if (!['open', 'approval'].includes(registrationType)) {
         return next(new AppError('Invalid registration type. Must be either "open" or "approval"', 400));
     }
 
     console.log("eventType: ", eventType);
 
-    // Create new event
+    // ✨ Create new event with location
     const newEvent = await Event.create({
         title,
         description,
@@ -74,10 +96,14 @@ const AddEvent = catchAsync(async (req, res, next) => {
         childAgeGroups: childAgeGroups && childAgeGroups.length > 0 ? childAgeGroups : [childrenAgeGroup],
         startDate: startDateTime,
         endDate: endDateTime,
-        startTime: startTimeObj, // Keep original time objects for reference
+        startTime: startTimeObj,
         endTime: endTimeObj,
         city,
         address,
+        location: {
+            type: 'Point',
+            coordinates: [longitude, latitude] // ✨ NEW: [longitude, latitude] format for GeoJSON
+        },
         maxParticipants,
         contactInfo,
         additionalNotes,
@@ -129,6 +155,7 @@ const updateEvent = catchAsync(async (req, res, next) => {
         endTime,
         city,
         address,
+        location, // ✨ NEW: location field
         maxParticipants,
         contactInfo,
         additionalNotes,
@@ -156,6 +183,32 @@ const updateEvent = catchAsync(async (req, res, next) => {
     if (allowChildren !== undefined) updateData.allowChildren = allowChildren;
     if (parentResponsibilities !== undefined) updateData.parentResponsibilities = parentResponsibilities;
     if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
+
+    // ✨ NEW: Handle location update
+    if (location !== undefined) {
+        if (!location.coordinates || !Array.isArray(location.coordinates) || location.coordinates.length !== 2) {
+            return next(new AppError('Format de coordonnées invalide. Format attendu: { coordinates: [longitude, latitude] }', 400));
+        }
+        
+        const [longitude, latitude] = location.coordinates;
+        
+        if (typeof longitude !== 'number' || typeof latitude !== 'number') {
+            return next(new AppError('Les coordonnées doivent être des nombres', 400));
+        }
+        
+        if (longitude < -180 || longitude > 180) {
+            return next(new AppError(`Longitude invalide: ${longitude}. Doit être entre -180 et 180`, 400));
+        }
+        
+        if (latitude < -90 || latitude > 90) {
+            return next(new AppError(`Latitude invalide: ${latitude}. Doit être entre -90 et 90`, 400));
+        }
+        
+        updateData.location = {
+            type: 'Point',
+            coordinates: [longitude, latitude]
+        };
+    }
 
     // Handle activity type updates
     if (activityType !== undefined) {
@@ -206,7 +259,6 @@ const updateEvent = catchAsync(async (req, res, next) => {
 
     // Handle maxParticipants
     if (maxParticipants !== undefined) {
-        // Check if reducing max participants below current participant count
         if (maxParticipants !== 'unlimited' && parseInt(maxParticipants) < event.participants.length) {
             return next(new AppError(
                 `Impossible de réduire le nombre maximum de participants en dessous du nombre actuel (${event.participants.length})`,
@@ -222,19 +274,16 @@ const updateEvent = catchAsync(async (req, res, next) => {
             return next(new AppError('Type d\'inscription invalide. Doit être "open" ou "approval"', 400));
         }
 
-        // If changing from approval to open, move pending participants to participants
         if (event.registrationType === 'approval' && registrationType === 'open') {
             const pendingToMove = event.pendingParticipants || [];
             const availableSpots = maxParticipants === 'unlimited'
                 ? Infinity
                 : parseInt(maxParticipants || event.maxParticipants) - event.participants.length;
 
-            // Move as many pending participants as possible
             const toMove = pendingToMove.slice(0, availableSpots);
             updateData.participants = [...event.participants, ...toMove];
             updateData.pendingParticipants = pendingToMove.slice(availableSpots);
 
-            // Send notifications to approved participants
             for (const participantId of toMove) {
                 await Notification.create({
                     recipient: participantId,
@@ -257,7 +306,6 @@ const updateEvent = catchAsync(async (req, res, next) => {
         }
         updateData.status = status;
 
-        // Send notifications to all participants if event is cancelled
         if (status === 'cancelled') {
             const allParticipants = [...event.participants, ...event.pendingParticipants];
             for (const participantId of allParticipants) {
@@ -273,10 +321,8 @@ const updateEvent = catchAsync(async (req, res, next) => {
         }
     }
 
-    // Update the updatedAt timestamp
     updateData.updatedAt = new Date();
 
-    // Perform the update
     const updatedEvent = await Event.findByIdAndUpdate(
         eventId,
         { $set: updateData },
@@ -286,7 +332,6 @@ const updateEvent = catchAsync(async (req, res, next) => {
         .populate('pendingParticipants', 'firstName lastName')
         .populate('creatorId', 'firstName lastName');
 
-    // Send notification to all participants about the update (except for status changes)
     if (!status || status === 'active') {
         const participantsToNotify = [...event.participants];
         for (const participantId of participantsToNotify) {
@@ -306,6 +351,130 @@ const updateEvent = catchAsync(async (req, res, next) => {
         message: 'Événement mis à jour avec succès',
         data: {
             event: updatedEvent
+        }
+    });
+});
+
+// ✨ NEW: Get events near a location (bonus feature for future use)
+const getEventsNearLocation = catchAsync(async (req, res, next) => {
+    const { longitude, latitude, maxDistance = 10000 } = req.query; // maxDistance in meters (default 10km)
+
+    if (!longitude || !latitude) {
+        return next(new AppError('Longitude et latitude sont requises', 400));
+    }
+
+    const lng = parseFloat(longitude);
+    const lat = parseFloat(latitude);
+
+    if (isNaN(lng) || isNaN(lat)) {
+        return next(new AppError('Coordonnées invalides', 400));
+    }
+
+    if (lng < -180 || lng > 180 || lat < -90 || lat > 90) {
+        return next(new AppError('Coordonnées hors limites', 400));
+    }
+
+    // Find events near the specified location using MongoDB geospatial query
+    const events = await Event.find({
+        location: {
+            $near: {
+                $geometry: {
+                    type: 'Point',
+                    coordinates: [lng, lat]
+                },
+                $maxDistance: parseInt(maxDistance)
+            }
+        },
+        status: 'active',
+        endDate: { $gte: new Date() }
+    })
+    .populate('creatorId', 'firstName lastName')
+    .limit(50);
+
+    res.status(200).json({
+        success: true,
+        results: events.length,
+        data: {
+            events
+        }
+    });
+});
+
+// controllers/eventController.js
+
+// ✨ NEW: Get events within a specific distance from user's location
+const getEventsByDistance = catchAsync(async (req, res, next) => {
+    const { longitude, latitude, distance = 5 } = req.query; // distance in km
+
+    if (!longitude || !latitude) {
+        return next(new AppError('Longitude et latitude sont requises', 400));
+    }
+
+    const lng = parseFloat(longitude);
+    const lat = parseFloat(latitude);
+    const dist = parseFloat(distance);
+
+    if (isNaN(lng) || isNaN(lat) || isNaN(dist)) {
+        return next(new AppError('Coordonnées ou distance invalides', 400));
+    }
+
+    if (lng < -180 || lng > 180 || lat < -90 || lat > 90) {
+        return next(new AppError('Coordonnées hors limites', 400));
+    }
+
+    if (dist <= 0 || dist > 100) {
+        return next(new AppError('Distance doit être entre 0 et 100 km', 400));
+    }
+
+    // Convert km to meters for MongoDB
+    const distanceInMeters = dist * 1000;
+
+    // Find active events near the specified location
+    const events = await Event.find({
+        location: {
+            $near: {
+                $geometry: {
+                    type: 'Point',
+                    coordinates: [lng, lat]
+                },
+                $maxDistance: distanceInMeters
+            }
+        },
+        status: 'active',
+        endDate: { $gte: new Date() }
+    })
+    .populate('creatorId', 'firstName lastName')
+    .sort({ startDate: 1 })
+    .limit(100);
+
+    // Calculate actual distance for each event
+    const eventsWithDistance = events.map(event => {
+        const eventLng = event.location.coordinates[0];
+        const eventLat = event.location.coordinates[1];
+        
+        // Haversine formula to calculate distance
+        const R = 6371; // Earth radius in km
+        const dLat = (eventLat - lat) * Math.PI / 180;
+        const dLng = (eventLng - lng) * Math.PI / 180;
+        const a = 
+            Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat * Math.PI / 180) * Math.cos(eventLat * Math.PI / 180) *
+            Math.sin(dLng/2) * Math.sin(dLng/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const calculatedDistance = R * c;
+
+        return {
+            ...event.toObject(),
+            distanceFromUser: Math.round(calculatedDistance * 10) / 10 // Round to 1 decimal
+        };
+    });
+
+    res.status(200).json({
+        success: true,
+        results: eventsWithDistance.length,
+        distance: dist,
+        data: {
+            events: eventsWithDistance
         }
     });
 });
@@ -681,4 +850,6 @@ module.exports = {
     leaveEvent,
     getAllEventsByUser,
     deleteEventById,
+    getEventsNearLocation,
+    getEventsByDistance
 };
