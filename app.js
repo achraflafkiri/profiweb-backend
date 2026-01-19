@@ -1,16 +1,11 @@
-// main-api/app.js
 const express = require("express");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
 const bodyParser = require("body-parser");
 const expressListEndpoints = require('express-list-endpoints');
 
-const authRouter = require("./routes/auth.route");
-const userRouter = require("./routes/user.route");
-const eventRouter = require("./routes/event.route");
-const groupRouter = require("./routes/group.routes");
-const notificationRouter = require("./routes/notification.routes");
-const messageRoutes = require("./routes/message.routes");
+const authRouter = require("./routes/auth.routes");
+const adminRouter = require("./routes/admin.routes");
 
 const handleErrors = require("./middlewares/handleErrors");
 const cors = require("cors");
@@ -20,8 +15,9 @@ dotenv.config({
   path: "./config/config.env",
 });
 
+// Middleware
 app.use(cors({
-  origin: "*", // or multiple domains
+  origin: "*",
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -36,20 +32,34 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
+// Connect to database
 connectDB();
 
+// Routes
 app.get("/", (req, res) => {
   res.send("Server Started Successfully :)");
 });
 
 app.use("/api/v1/auth", authRouter);
-app.use("/api/v1/users", userRouter);
-app.use("/api/v1/events", eventRouter);
-app.use("/api/v1/groups", groupRouter);
-app.use("/api/v1/notifications", notificationRouter);
-app.use("/api/v1/messages", messageRoutes);
+app.use("/api/v1/admins", adminRouter);
 
+// Error handling
 app.use(handleErrors); 
+
+// Error handling - TEMPORARY DEBUG VERSION
+app.use((err, req, res, next) => {
+  console.error("❌ UNHANDLED ERROR:", {
+    message: err.message,
+    stack: err.stack,
+    fullError: JSON.stringify(err, null, 2)
+  });
+  
+  res.status(err.statusCode || 500).json({
+    status: "error",
+    message: err.message || "Server error. Please try again later.",
+    error: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
+});
 
 const PORT = process.env.PORT || 8090;
 
