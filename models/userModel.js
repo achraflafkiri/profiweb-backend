@@ -75,6 +75,12 @@ const userSchema = new mongoose.Schema({
     default: 'user'
   },
 
+  // IS DELETED
+  isDeleted: {
+    type: Boolean,
+    default: false
+  },
+
   // DEPARTMENT (Required for users, optional for admins)
   department: {
     type: String,
@@ -171,6 +177,17 @@ const userSchema = new mongoose.Schema({
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
+  },
+
+  // Activated By 
+  activatedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+
+  // Date 
+  activatedAt: {
+    type: Date,
   },
 
   updatedBy: {

@@ -20,6 +20,7 @@ router.get('/users/all', isAdmin, adminController.getAllUsers);
 // router.get('/users/:userId', isAdmin, adminController.getUser);
 router.post('/users/add', isAdmin, adminController.createUser);
 // router.put('/users/:userId', isAdmin, adminController.updateUser);
-// router.delete('/users/:userId', isAdmin, adminController.deleteUser);
+router.delete('/users/:userId/deactivate', isAdmin, adminController.deactivateUserById);
+router.post('/users/:userId/activate', isAdmin, adminController.activateUserById);
 
 module.exports = router;
