@@ -1,5 +1,5 @@
 // controllers/adminController.js
-const User = require("../models/userModel");
+const User = require("../models/user.model");
 const catchAsync = require("../utils/catchAsync");
 const AppError = require("../utils/AppError");
 const { default: mongoose } = require("mongoose");

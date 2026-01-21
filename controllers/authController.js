@@ -1,4 +1,4 @@
-const User = require("../models/userModel");
+const User = require("../models/user.model");
 const AppError = require("../utils/AppError");
 const jwt = require("jsonwebtoken");
 const catchAsync = require("../utils/catchAsync");
@@ -42,7 +42,7 @@ const sendTokenResponse = (user, statusCode, res) => {
 exports.login = catchAsync(async (req, res, next) => {
   const { emailOrUsername, password } = req.body;
 
-  console.log(" =========> ", emailOrUsername, password);
+  // console.log(" =========> ", emailOrUsername, password);
 
   // Check required fields
   if (!emailOrUsername || !password) {

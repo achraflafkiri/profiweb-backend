@@ -6,6 +6,8 @@ const expressListEndpoints = require('express-list-endpoints');
 
 const authRouter = require("./routes/auth.routes");
 const adminRouter = require("./routes/admin.routes");
+const projectsRouter = require("./routes/project.routes");
+const clientsRouter = require("./routes/client.routes");
 
 const handleErrors = require("./middlewares/handleErrors");
 const cors = require("cors");
@@ -42,6 +44,8 @@ app.get("/", (req, res) => {
 
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/admins", adminRouter);
+app.use("/api/v1/projects", projectsRouter);
+app.use("/api/v1/clients", clientsRouter);
 
 // Error handling
 app.use(handleErrors); 
