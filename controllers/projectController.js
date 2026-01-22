@@ -106,15 +106,6 @@ const getProjectById = catchAsync(async (req, res, next) => {
     .populate({
       path: 'client.id',
       select: 'name email company phone address contactPerson'
-    })
-    .populate({
-      path: 'createdBy',
-      select: 'name email'
-    })
-    .populate({
-      path: 'tasks',
-      select: 'title status dueDate assignedTo priority',
-      options: { limit: 10, sort: { dueDate: 1 } }
     });
 
   // Check if project exists
