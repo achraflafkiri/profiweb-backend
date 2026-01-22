@@ -2,8 +2,10 @@ const express = require("express");
 const {
     createProject,
     getProjectById,
-    deleteProject,
-    getAllProjects
+    archiveProject,
+    getAllProjects,
+    getArchivedProjects,
+    restoreProject
 } = require("../controllers/projectController");
 const { protect } = require("../middlewares/auth");
 
@@ -16,8 +18,14 @@ router.route("/")
     .get(getAllProjects)
     .post(createProject);
 
+router.route("/archived")
+    .get(getArchivedProjects);
+
 router.route("/:id")
     .get(getProjectById)
-    .delete(deleteProject);
+    .patch(archiveProject);
+
+router.route("/:id/restore")
+    .patch(restoreProject);
 
 module.exports = router;

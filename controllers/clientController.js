@@ -83,7 +83,74 @@ const deleteClient = catchAsync(async (req, res, next) => {
   
 });
 
+const getClients = catchAsync(async (req, res, next) => {
+  // Get query parameters for filtering, sorting, pagination
+  const { 
+    search,
+    status,
+    industry,
+    sort = 'name',
+    page = 1,
+    limit = 10
+  } = req.query;
+
+  // Build query
+  let query = { isActive: true };
+  
+  // Search by name, email, company, or phone
+  if (search) {
+    query.$or = [
+      { name: { $regex: search, $options: 'i' } },
+      { email: { $regex: search, $options: 'i' } },
+      { company: { $regex: search, $options: 'i' } },
+      { phone: { $regex: search, $options: 'i' } }
+    ];
+  }
+
+  // Filter by status
+  if (status) {
+    query.status = status;
+  }
+
+  // Filter by industry
+  if (industry) {
+    query.industry = industry;
+  }
+
+  // Calculate pagination
+  const skip = (page - 1) * limit;
+  const pageInt = parseInt(page);
+  const limitInt = parseInt(limit);
+
+  // Execute query with pagination
+  const clients = await Client.find(query)
+    .sort(sort)
+    .skip(skip)
+    .limit(limitInt)
+    .populate('projects', 'title status')
+    .select('-__v'); // Exclude version key
+
+  // Get total count for pagination
+  const total = await Client.countDocuments(query);
+  const totalPages = Math.ceil(total / limitInt);
+
+  res.status(200).json({
+    status: 'success',
+    results: clients.length,
+    data: {
+      clients,
+      pagination: {
+        currentPage: pageInt,
+        totalPages,
+        totalItems: total,
+        itemsPerPage: limitInt
+      }
+    }
+  });
+});
+
 module.exports = {
   createClient,
-  deleteClient
+  deleteClient,
+  getClients
 };

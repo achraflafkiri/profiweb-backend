@@ -9,25 +9,25 @@ const projectSchema = new mongoose.Schema({
     trim: true,
     maxlength: [200, 'Title cannot exceed 200 characters']
   },
-  
+
   slug: {
     type: String,
     unique: true,
     lowercase: true,
     index: true
   },
-  
+
   description: {
     type: String,
     required: [true, 'Project description is required'],
     maxlength: [1000, 'Description cannot exceed 1000 characters']
   },
-  
+
   shortDescription: {
     type: String,
     maxlength: [200, 'Short description cannot exceed 200 characters']
   },
-  
+
   // Client Information
   client: {
     name: {
@@ -45,7 +45,7 @@ const projectSchema = new mongoose.Schema({
       phone: String
     }
   },
-  
+
   // Project Details
   category: {
     type: String,
@@ -67,54 +67,54 @@ const projectSchema = new mongoose.Schema({
       'Other'
     ]
   },
-  
+
   subcategory: String,
-  
+
   tags: [{
     type: String,
     lowercase: true,
     trim: true
   }],
-  
+
   // Status & Timeline
   status: {
     type: String,
     enum: ['planning', 'active', 'on-hold', 'completed', 'cancelled', 'archived'],
     default: 'planning'
   },
-  
+
   priority: {
     type: String,
     enum: ['standard', 'express', '24-hours'],
     default: 'standard'
   },
-  
+
   startDate: {
     type: Date,
     required: true
   },
-  
+
   endDate: {
     type: Date,
     required: true
   },
-  
+
   actualStartDate: Date,
   actualEndDate: Date,
-  
+
   // Financial Information
   budget: {
     type: Number,
     required: [true, 'Project budget is required'],
     min: [0, 'Budget cannot be negative']
   },
-  
+
   currency: {
     type: String,
     default: 'MAD',
     enum: ['MAD', 'EUR']
   },
-  
+
   cost: {
     estimated: Number,
     actual: Number,
@@ -125,14 +125,14 @@ const projectSchema = new mongoose.Schema({
       category: String
     }]
   },
-  
+
   // Team & Assignments
   projectManager: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
-  
+
   // Progress Tracking
   progress: {
     type: Number,
@@ -141,28 +141,34 @@ const projectSchema = new mongoose.Schema({
     default: 0
   },
 
+  // Note
+  note: {
+    type: String,
+    default: ""
+  },
+
   // Metadata
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
-  
+
   updatedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
-  
+
   isActive: {
     type: Boolean,
     default: true
   },
-  
+
   isPublic: {
     type: Boolean,
     default: false
   }
-  
+
 }, {
   timestamps: true,
   toJSON: { virtuals: true },
@@ -170,7 +176,7 @@ const projectSchema = new mongoose.Schema({
 });
 
 // Virtual for project duration in days
-projectSchema.virtual('duration').get(function() {
+projectSchema.virtual('duration').get(function () {
   if (this.startDate && this.endDate) {
     const diffTime = Math.abs(this.endDate - this.startDate);
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -179,7 +185,7 @@ projectSchema.virtual('duration').get(function() {
 });
 
 // Virtual for overdue status
-projectSchema.virtual('isOverdue').get(function() {
+projectSchema.virtual('isOverdue').get(function () {
   if (this.endDate && new Date() > this.endDate && this.status !== 'completed') {
     return true;
   }
@@ -187,7 +193,7 @@ projectSchema.virtual('isOverdue').get(function() {
 });
 
 // Virtual for days remaining
-projectSchema.virtual('daysRemaining').get(function() {
+projectSchema.virtual('daysRemaining').get(function () {
   if (this.endDate) {
     const diffTime = this.endDate - new Date();
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -195,15 +201,54 @@ projectSchema.virtual('daysRemaining').get(function() {
   return 0;
 });
 
-// Middleware to generate slug
-projectSchema.pre('save', function(next) {
+// And replace it with this new one:
+const createSlug = (text) => {
+  return text
+    .toString()
+    .toLowerCase()
+    .normalize('NFD')                   // split an accented letter in the base letter and the accent
+    .replace(/[\u0300-\u036f]/g, '')   // remove all previously split accents
+    .replace(/[^\w\s-]/g, '')          // remove all non-word characters
+    .replace(/\s+/g, '-')              // replace spaces with -
+    .replace(/--+/g, '-')              // replace multiple - with single -
+    .trim();                           // trim - from start and end of text
+};
+
+projectSchema.pre('save', async function (next) {
   if (this.isModified('title')) {
-    this.slug = this.title
-      .toLowerCase()
-      .replace(/[^\w\s]/gi, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .trim();
+    // Generate base slug
+    let baseSlug = createSlug(this.title);
+    
+    // Check if slug exists and find unique one
+    let slug = baseSlug;
+    let counter = 1;
+    let slugExists = true;
+    let attempts = 0;
+    const maxAttempts = 100;
+
+    while (slugExists && attempts < maxAttempts) {
+      attempts++;
+      
+      const existingProject = await this.constructor.findOne({ 
+        slug, 
+        _id: { $ne: this._id } // Exclude current document when updating
+      });
+
+      if (!existingProject) {
+        slugExists = false;
+      } else {
+        // Try with incrementing number
+        slug = `${baseSlug}-${counter}`;
+        counter++;
+      }
+    }
+
+    // If we still have a conflict after max attempts, add timestamp
+    if (slugExists) {
+      slug = `${baseSlug}-${Date.now()}`;
+    }
+
+    this.slug = slug;
   }
   next();
 });
