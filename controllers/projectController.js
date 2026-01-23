@@ -1,6 +1,7 @@
 const catchAsync = require("../utils/catchAsync");
 const Project = require("../models/project.model");
 const Client = require("../models/client.model");
+const Question = require("../models/question.model");
 const User = require("../models/user.model");
 const AppError = require("../utils/AppError");
 
@@ -367,7 +368,7 @@ const restoreProject = catchAsync(async (req, res, next) => {
         status: status,
         isActive: true,
         updatedAt: Date.now(),
-        updatedBy: req.user.id // Assuming you have authentication middleware
+        updatedBy: req.user.id
       }
     },
     { new: true, runValidators: true }
@@ -385,11 +386,232 @@ const restoreProject = catchAsync(async (req, res, next) => {
   });
 });
 
+const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
+  console.log("herllo babay ");
+  console.log("herllo babay ");
+  console.log("herllo babay ");
+  console.log("herllo babay ");
+  console.log("herllo babay ");
+  console.log("herllo babay ");
+  console.log("herllo babay ");
+  console.log("herllo babay ");
+  console.log("herllo babay ");
+  console.log("herllo babay ");
+  console.log("herllo babay ");
+  console.log("herllo babay ");
+  console.log("herllo babay ");
+  
+  const { id: projectId } = req.params;
+  const { questions, projectType } = req.body;
+
+  console.log("req.body : ", req.body);
+
+  // Check if project exists
+  const project = await Project.findById(projectId);
+  if (!project) {
+    return next(new AppError('Project not found', 404));
+  }
+
+  console.log("project : ", project);
+
+  // Validate that questions array exists
+  if (!questions || !Array.isArray(questions)) {
+    return next(new AppError('Questions array is required', 400));
+  }
+
+  // Process each question
+  const savedQuestions = [];
+  
+  for (const questionData of questions) {
+    const {
+      questionKey,
+      question,
+      type,
+      answer,
+      section,
+      sectionName,
+      order,
+      isRequired,
+      options,
+      placeholder,
+      settings,
+      isCustom
+    } = questionData;
+
+    // Determine status based on whether answer exists
+    const status = answer ? 'answered' : 'pending';
+
+    // Use findOneAndUpdate with upsert to create or update
+    const savedQuestion = await Question.findOneAndUpdate(
+      { 
+        project: projectId, 
+        questionKey: questionKey 
+      },
+      {
+        project: projectId,
+        questionKey,
+        question,
+        type,
+        answer,
+        section,
+        sectionName,
+        order,
+        isRequired,
+        projectType: projectType || 'wordpress',
+        status,
+        ...(options && { options }),
+        ...(placeholder && { placeholder }),
+        ...(settings && { settings }),
+        ...(isCustom !== undefined && { isCustom })
+      },
+      { 
+        new: true, 
+        upsert: true, 
+        runValidators: true 
+      }
+    );
+
+    savedQuestions.push(savedQuestion);
+  }
+
+  // Optionally update project's questionsStatus
+  const allAnswered = savedQuestions.every(q => q.status === 'answered');
+  const anyAnswered = savedQuestions.some(q => q.status === 'answered');
+  
+  let questionsStatus = 'pending';
+  if (allAnswered) {
+    questionsStatus = 'completed';
+  } else if (anyAnswered) {
+    questionsStatus = 'in-progress';
+  }
+
+  await Project.findByIdAndUpdate(
+    projectId,
+    { 
+      questionsStatus,
+      ...(allAnswered && { questionsCompletedAt: new Date() })
+    }
+  );
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Project questions updated successfully',
+    data: {
+      questions: savedQuestions,
+      questionsStatus
+    }
+  });
+});
+
+const getQuestionsByProject = catchAsync(async (req, res, next) => {
+  const { id: projectId } = req.params;
+
+  // Check if project exists
+  const project = await Project.findById(projectId);
+  if (!project) {
+    return next(new AppError('Project not found', 404));
+  }
+
+  // Get all questions for this project
+  const questions = await Question.find({ project: projectId })
+    .sort({ order: 1, createdAt: 1 }) // Sort by order then by creation date
+    .select('-__v'); // Exclude version key
+
+  // If no questions found, return empty array
+  if (!questions || questions.length === 0) {
+    return res.status(200).json({
+      status: 'success',
+      message: 'No questions found for this project',
+      data: {
+        questions: [],
+        project: {
+          id: project._id,
+          title: project.title,
+          questionsStatus: project.questionsStatus || 'pending'
+        }
+      }
+    });
+  }
+
+  // Group questions by section for better organization
+  const groupedQuestions = questions.reduce((acc, question) => {
+    const section = question.section || 'general';
+    const sectionName = question.sectionName || 'General Information';
+    
+    if (!acc[section]) {
+      acc[section] = {
+        sectionName,
+        questions: []
+      };
+    }
+    
+    acc[section].questions.push(question);
+    return acc;
+  }, {});
+
+  // Convert to array for easier frontend consumption
+  const sections = Object.keys(groupedQuestions).map(section => ({
+    section,
+    sectionName: groupedQuestions[section].sectionName,
+    questions: groupedQuestions[section].questions
+  }));
+
+  // Calculate completion statistics
+  const totalQuestions = questions.length;
+  const answeredQuestions = questions.filter(q => q.status === 'answered').length;
+  const pendingQuestions = questions.filter(q => q.status === 'pending').length;
+  const completionPercentage = totalQuestions > 0 
+    ? Math.round((answeredQuestions / totalQuestions) * 100) 
+    : 0;
+
+  // Get required questions statistics
+  const requiredQuestions = questions.filter(q => q.isRequired);
+  const requiredAnswered = requiredQuestions.filter(q => q.status === 'answered').length;
+  const requiredCompletion = requiredQuestions.length > 0
+    ? Math.round((requiredAnswered / requiredQuestions.length) * 100)
+    : 100;
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      questions,
+      sections,
+      statistics: {
+        total: totalQuestions,
+        answered: answeredQuestions,
+        pending: pendingQuestions,
+        completionPercentage,
+        required: {
+          total: requiredQuestions.length,
+          answered: requiredAnswered,
+          completionPercentage: requiredCompletion
+        }
+      },
+      project: {
+        id: project._id,
+        title: project.title,
+        description: project.description,
+        questionsStatus: project.questionsStatus || 'pending',
+        questionsCompletedAt: project.questionsCompletedAt,
+        projectType: project.projectType || 'wordpress'
+      },
+      metadata: {
+        lastUpdated: new Date(),
+        count: questions.length,
+        customFieldsCount: questions.filter(q => q.isCustom).length,
+        standardFieldsCount: questions.filter(q => !q.isCustom).length
+      }
+    }
+  });
+});
+
 module.exports = {
   createProject,
   getProjectById,
   archiveProject,
   getArchivedProjects,
   getAllProjects,
-  restoreProject
+  restoreProject,
+  getQuestionsByProject,
+  createOrUpdateQuestions
 };

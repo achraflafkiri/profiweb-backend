@@ -1,4 +1,3 @@
-// models/project.model.js
 const mongoose = require('mongoose');
 
 const projectSchema = new mongoose.Schema({
@@ -147,6 +146,26 @@ const projectSchema = new mongoose.Schema({
     default: ""
   },
 
+  // Questions data
+  questions: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
+
+  // Template selection
+  selectedTemplate: {
+    type: String,
+    default: null
+  },
+
+  // Questions metadata
+  questionsStatus: {
+    type: String,
+    enum: ['pending', 'in-progress', 'completed', 'review'],
+    default: 'pending'
+  },
+  questionsCompletedAt: Date,
+
   // Metadata
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -201,17 +220,17 @@ projectSchema.virtual('daysRemaining').get(function () {
   return 0;
 });
 
-// And replace it with this new one:
+// Create slug from title
 const createSlug = (text) => {
   return text
     .toString()
     .toLowerCase()
-    .normalize('NFD')                   // split an accented letter in the base letter and the accent
-    .replace(/[\u0300-\u036f]/g, '')   // remove all previously split accents
-    .replace(/[^\w\s-]/g, '')          // remove all non-word characters
-    .replace(/\s+/g, '-')              // replace spaces with -
-    .replace(/--+/g, '-')              // replace multiple - with single -
-    .trim();                           // trim - from start and end of text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/--+/g, '-')
+    .trim();
 };
 
 projectSchema.pre('save', async function (next) {
@@ -231,7 +250,7 @@ projectSchema.pre('save', async function (next) {
       
       const existingProject = await this.constructor.findOne({ 
         slug, 
-        _id: { $ne: this._id } // Exclude current document when updating
+        _id: { $ne: this._id }
       });
 
       if (!existingProject) {
@@ -259,6 +278,8 @@ projectSchema.index({ status: 1, priority: 1 });
 projectSchema.index({ client: 1 });
 projectSchema.index({ projectManager: 1 });
 projectSchema.index({ startDate: 1, endDate: 1 });
+projectSchema.index({ 'questions.initialized': 1 });
+projectSchema.index({ questionsStatus: 1 });
 
 const Project = mongoose.models.Project || mongoose.model('Project', projectSchema);
 

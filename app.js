@@ -12,10 +12,16 @@ const clientsRouter = require("./routes/client.routes");
 const handleErrors = require("./middlewares/handleErrors");
 const cors = require("cors");
 
+
 const app = express();
 dotenv.config({
   path: "./config/config.env",
 });
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+app.use(bodyParser.json());
 
 // Middleware
 app.use(cors({

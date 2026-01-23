@@ -5,11 +5,13 @@ const {
     archiveProject,
     getAllProjects,
     getArchivedProjects,
-    restoreProject
+    restoreProject,
+    createOrUpdateQuestions,
+    getQuestionsByProject
 } = require("../controllers/projectController");
 const { protect } = require("../middlewares/auth");
 
-const router = express.Router();
+const router = express.Router({ mergeParams: true });
 
 router.use(protect);
 
@@ -27,5 +29,12 @@ router.route("/:id")
 
 router.route("/:id/restore")
     .patch(restoreProject);
+
+// create question
+router.route("/:id/questions")
+    .patch(createOrUpdateQuestions);
+
+router.route("/:id/questions")
+    .get(getQuestionsByProject);
 
 module.exports = router;
