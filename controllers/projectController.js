@@ -386,122 +386,6 @@ const restoreProject = catchAsync(async (req, res, next) => {
   });
 });
 
-const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
-  console.log("herllo babay ");
-  console.log("herllo babay ");
-  console.log("herllo babay ");
-  console.log("herllo babay ");
-  console.log("herllo babay ");
-  console.log("herllo babay ");
-  console.log("herllo babay ");
-  console.log("herllo babay ");
-  console.log("herllo babay ");
-  console.log("herllo babay ");
-  console.log("herllo babay ");
-  console.log("herllo babay ");
-  console.log("herllo babay ");
-  
-  const { id: projectId } = req.params;
-  const { questions, projectType } = req.body;
-
-  console.log("req.body : ", req.body);
-
-  // Check if project exists
-  const project = await Project.findById(projectId);
-  if (!project) {
-    return next(new AppError('Project not found', 404));
-  }
-
-  console.log("project : ", project);
-
-  // Validate that questions array exists
-  if (!questions || !Array.isArray(questions)) {
-    return next(new AppError('Questions array is required', 400));
-  }
-
-  // Process each question
-  const savedQuestions = [];
-  
-  for (const questionData of questions) {
-    const {
-      questionKey,
-      question,
-      type,
-      answer,
-      section,
-      sectionName,
-      order,
-      isRequired,
-      options,
-      placeholder,
-      settings,
-      isCustom
-    } = questionData;
-
-    // Determine status based on whether answer exists
-    const status = answer ? 'answered' : 'pending';
-
-    // Use findOneAndUpdate with upsert to create or update
-    const savedQuestion = await Question.findOneAndUpdate(
-      { 
-        project: projectId, 
-        questionKey: questionKey 
-      },
-      {
-        project: projectId,
-        questionKey,
-        question,
-        type,
-        answer,
-        section,
-        sectionName,
-        order,
-        isRequired,
-        projectType: projectType || 'wordpress',
-        status,
-        ...(options && { options }),
-        ...(placeholder && { placeholder }),
-        ...(settings && { settings }),
-        ...(isCustom !== undefined && { isCustom })
-      },
-      { 
-        new: true, 
-        upsert: true, 
-        runValidators: true 
-      }
-    );
-
-    savedQuestions.push(savedQuestion);
-  }
-
-  // Optionally update project's questionsStatus
-  const allAnswered = savedQuestions.every(q => q.status === 'answered');
-  const anyAnswered = savedQuestions.some(q => q.status === 'answered');
-  
-  let questionsStatus = 'pending';
-  if (allAnswered) {
-    questionsStatus = 'completed';
-  } else if (anyAnswered) {
-    questionsStatus = 'in-progress';
-  }
-
-  await Project.findByIdAndUpdate(
-    projectId,
-    { 
-      questionsStatus,
-      ...(allAnswered && { questionsCompletedAt: new Date() })
-    }
-  );
-
-  res.status(200).json({
-    status: 'success',
-    message: 'Project questions updated successfully',
-    data: {
-      questions: savedQuestions,
-      questionsStatus
-    }
-  });
-});
 
 const getQuestionsByProject = catchAsync(async (req, res, next) => {
   const { id: projectId } = req.params;
@@ -601,6 +485,151 @@ const getQuestionsByProject = catchAsync(async (req, res, next) => {
         customFieldsCount: questions.filter(q => q.isCustom).length,
         standardFieldsCount: questions.filter(q => !q.isCustom).length
       }
+    }
+  });
+});
+
+
+const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
+  const { id: projectId } = req.params;
+  const { questions, projectType } = req.body;
+
+  console.log("Creating/Updating questions for project:", projectId);
+
+  // Check if project exists
+  const project = await Project.findById(projectId);
+  if (!project) {
+    return next(new AppError('Project not found', 404));
+  }
+
+  // Validate that questions array exists
+  if (!questions || !Array.isArray(questions)) {
+    return next(new AppError('Questions array is required', 400));
+  }
+
+  // Process each question
+  const savedQuestions = [];
+  
+  for (const questionData of questions) {
+    const {
+      questionKey,
+      question,
+      type,
+      answer,
+      section,
+      sectionName,
+      order,
+      isRequired,
+      options,
+      placeholder,
+      settings,
+      isCustom
+    } = questionData;
+
+    // Handle array answers for multiselect/checkbox types
+    let processedAnswer = answer;
+    if ((type === 'multiselect' || type === 'checkbox') && Array.isArray(answer)) {
+      processedAnswer = answer.join(', ');
+    }
+
+    // Determine status based on whether answer exists
+    const status = processedAnswer && processedAnswer.toString().trim() !== '' ? 'answered' : 'pending';
+
+    // Process options to ensure they have the correct structure
+    let processedOptions = [];
+    if (options && Array.isArray(options)) {
+      processedOptions = options.map(option => {
+        if (typeof option === 'string') {
+          // If option is a string, convert to { value: string, label: string }
+          return { value: option, label: option };
+        } else if (option && typeof option === 'object') {
+          // If option is an object, extract value and label
+          let value = option.value;
+          let label = option.label || option.value;
+          
+          // Handle nested value object (the issue in the error)
+          if (value && typeof value === 'object' && value.value !== undefined) {
+            value = value.value;
+          }
+          if (label && typeof label === 'object' && label.label !== undefined) {
+            label = label.label;
+          }
+          
+          // Convert to string if needed
+          if (value !== null && value !== undefined) {
+            value = String(value);
+          }
+          if (label !== null && label !== undefined) {
+            label = String(label);
+          }
+          
+          return { value: value || '', label: label || '' };
+        }
+        return { value: '', label: '' };
+      }).filter(opt => opt.value !== undefined && opt.value !== null);
+    }
+
+    // Use findOneAndUpdate with upsert to create or update
+    const savedQuestion = await Question.findOneAndUpdate(
+      { 
+        project: projectId, 
+        questionKey: questionKey 
+      },
+      {
+        project: projectId,
+        questionKey,
+        question,
+        type,
+        answer: processedAnswer,
+        section: section || 'general',
+        sectionName: sectionName || 'General',
+        order: order || 0,
+        isRequired: isRequired || false,
+        projectType: projectType || 'wordpress',
+        status,
+        ...(options && { options: processedOptions }),
+        ...(placeholder && { placeholder }),
+        ...(settings && { settings }),
+        ...(isCustom !== undefined && { isCustom: Boolean(isCustom) })
+      },
+      { 
+        new: true, 
+        upsert: true, 
+        runValidators: true 
+      }
+    );
+
+    savedQuestions.push(savedQuestion);
+  }
+
+  // Optionally update project's questionsStatus
+  const allAnswered = savedQuestions.every(q => q.status === 'answered');
+  const anyAnswered = savedQuestions.some(q => q.status === 'answered');
+  
+  let questionsStatus = 'pending';
+  if (allAnswered) {
+    questionsStatus = 'completed';
+  } else if (anyAnswered) {
+    questionsStatus = 'in-progress';
+  }
+
+  await Project.findByIdAndUpdate(
+    projectId,
+    { 
+      questionsStatus,
+      ...(allAnswered && { questionsCompletedAt: new Date() })
+    }
+  );
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Project questions updated successfully',
+    data: {
+      questions: savedQuestions,
+      questionsStatus,
+      count: savedQuestions.length,
+      customFieldsCount: savedQuestions.filter(q => q.isCustom).length,
+      standardFieldsCount: savedQuestions.filter(q => !q.isCustom).length
     }
   });
 });
