@@ -1,4 +1,3 @@
-// utils/pdfGenerator.js - WITH PROPER MARGINS AND PADDING
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
@@ -230,9 +229,6 @@ class PDFGenerator {
     /**
      * Add project information content with proper spacing
      */
-    /**
-   * Add project information content with proper spacing
-   */
     async addProjectInfo(doc, project, questions) {
         console.log("📝 Adding project information to PDF...");
 
@@ -284,31 +280,32 @@ class PDFGenerator {
             { label: 'Progress', value: `${project.progress || 0}%` }
         ];
 
-        projectDetails.forEach((detail, index) => {
-            this.checkPageBreak(doc, 30);
+        // NEW: Render project details as simple label + value blocks (label bold, value below)
+        projectDetails.forEach((detail) => {
+            // Ensure there's space for the label + value, otherwise add a new page
+            this.checkPageBreak(doc, 50);
 
-            // Alternate row colors for better readability
-            if (index % 2 === 0) {
-                doc.rect(this.PAGE_MARGIN.left, doc.y - 5, sectionWidth, 22)
-                    .fillColor('#fafafa')
-                    .fill();
-            }
-
+            // Label (bold)
             doc.fontSize(11)
                 .font('Helvetica-Bold')
                 .fillColor('#444444')
                 .text(`${detail.label}:`, this.PAGE_MARGIN.left + this.CONTENT_PADDING, doc.y, {
-                    width: 150
+                    width: sectionWidth - this.CONTENT_PADDING * 2
                 });
 
+            doc.moveDown(0.15);
+
+            // Value (normal)
             doc.fontSize(11)
                 .font('Helvetica')
                 .fillColor('#000000')
-                .text(detail.value, this.PAGE_MARGIN.left + 160, doc.y, {
-                    width: sectionWidth - 160
+                .text(detail.value, {
+                    indent: this.CONTENT_PADDING,
+                    width: sectionWidth - this.CONTENT_PADDING * 2,
+                    align: 'left'
                 });
 
-            doc.moveDown(1.2);
+            doc.moveDown(0.8);
         });
 
         doc.moveDown(1);

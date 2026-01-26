@@ -93,8 +93,6 @@ const questionSchema = new mongoose.Schema({
     default: 'pending'
   },
 
-  
-  
   // Additional settings
   settings: {
     rows: Number, // For textareas
