@@ -7,7 +7,8 @@ const {
     getArchivedProjects,
     restoreProject,
     createOrUpdateQuestions,
-    getQuestionsByProject
+    getQuestionsByProject,
+    deleteProject
 } = require("../controllers/projectController");
 const { protect } = require("../middlewares/auth");
 
@@ -25,7 +26,8 @@ router.route("/archived")
 
 router.route("/:id")
     .get(getProjectById)
-    .patch(archiveProject);
+    .patch(archiveProject)
+    .delete(deleteProject);
 
 router.route("/:id/restore")
     .patch(restoreProject);

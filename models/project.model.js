@@ -183,10 +183,43 @@ const projectSchema = new mongoose.Schema({
     default: true
   },
 
+  isDeleted: {
+    type: Boolean,
+    default: false
+  },
+
   isPublic: {
     type: Boolean,
     default: false
-  }
+  },
+
+  documents: [{
+    type: {
+      type: String,
+      enum: ['doc-infos', 'ai-structured', 'other'],
+      required: true
+    },
+    filename: {
+      type: String,
+      required: true
+    },
+    url: {
+      type: String,
+      required: true
+    },
+    generatedAt: {
+      type: Date,
+      default: Date.now
+    },
+    size: {
+      type: Number,
+      default: 0
+    },
+    pages: {
+      type: Number,
+      default: 1
+    }
+  }],
 
 }, {
   timestamps: true,
@@ -237,7 +270,7 @@ projectSchema.pre('save', async function (next) {
   if (this.isModified('title')) {
     // Generate base slug
     let baseSlug = createSlug(this.title);
-    
+
     // Check if slug exists and find unique one
     let slug = baseSlug;
     let counter = 1;
@@ -247,9 +280,9 @@ projectSchema.pre('save', async function (next) {
 
     while (slugExists && attempts < maxAttempts) {
       attempts++;
-      
-      const existingProject = await this.constructor.findOne({ 
-        slug, 
+
+      const existingProject = await this.constructor.findOne({
+        slug,
         _id: { $ne: this._id }
       });
 

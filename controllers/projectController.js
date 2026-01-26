@@ -114,21 +114,6 @@ const getProjectById = catchAsync(async (req, res, next) => {
     return next(new AppError('Project not found', 404));
   }
 
-  // Authorization check
-  const userRole = req.user.role;
-  const userId = req.user.id;
-
-  const canViewProject =
-    userRole === 'admin' ||
-    userRole === 'manager' ||
-    project.projectManager.toString() === userId.toString() ||
-    project.createdBy.toString() === userId.toString() ||
-    project.teamMembers.some(member => member.user._id.toString() === userId.toString());
-
-  if (!canViewProject && !project.isPublic) {
-    return next(new AppError('You do not have permission to view this project', 403));
-  }
-
   // Calculate additional project metrics
   const projectData = project.toObject();
 
@@ -386,7 +371,6 @@ const restoreProject = catchAsync(async (req, res, next) => {
   });
 });
 
-
 const getQuestionsByProject = catchAsync(async (req, res, next) => {
   const { id: projectId } = req.params;
 
@@ -421,14 +405,14 @@ const getQuestionsByProject = catchAsync(async (req, res, next) => {
   const groupedQuestions = questions.reduce((acc, question) => {
     const section = question.section || 'general';
     const sectionName = question.sectionName || 'General Information';
-    
+
     if (!acc[section]) {
       acc[section] = {
         sectionName,
         questions: []
       };
     }
-    
+
     acc[section].questions.push(question);
     return acc;
   }, {});
@@ -444,8 +428,8 @@ const getQuestionsByProject = catchAsync(async (req, res, next) => {
   const totalQuestions = questions.length;
   const answeredQuestions = questions.filter(q => q.status === 'answered').length;
   const pendingQuestions = questions.filter(q => q.status === 'pending').length;
-  const completionPercentage = totalQuestions > 0 
-    ? Math.round((answeredQuestions / totalQuestions) * 100) 
+  const completionPercentage = totalQuestions > 0
+    ? Math.round((answeredQuestions / totalQuestions) * 100)
     : 0;
 
   // Get required questions statistics
@@ -489,10 +473,9 @@ const getQuestionsByProject = catchAsync(async (req, res, next) => {
   });
 });
 
-
 const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
   const { id: projectId } = req.params;
-  const { questions, projectType } = req.body;
+  const { questions, projectType, generatePDFs = true } = req.body;
 
   console.log("Creating/Updating questions for project:", projectId);
 
@@ -509,7 +492,7 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
 
   // Process each question
   const savedQuestions = [];
-  
+
   for (const questionData of questions) {
     const {
       questionKey,
@@ -546,7 +529,7 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
           // If option is an object, extract value and label
           let value = option.value;
           let label = option.label || option.value;
-          
+
           // Handle nested value object (the issue in the error)
           if (value && typeof value === 'object' && value.value !== undefined) {
             value = value.value;
@@ -554,7 +537,7 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
           if (label && typeof label === 'object' && label.label !== undefined) {
             label = label.label;
           }
-          
+
           // Convert to string if needed
           if (value !== null && value !== undefined) {
             value = String(value);
@@ -562,7 +545,7 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
           if (label !== null && label !== undefined) {
             label = String(label);
           }
-          
+
           return { value: value || '', label: label || '' };
         }
         return { value: '', label: '' };
@@ -571,9 +554,9 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
 
     // Use findOneAndUpdate with upsert to create or update
     const savedQuestion = await Question.findOneAndUpdate(
-      { 
-        project: projectId, 
-        questionKey: questionKey 
+      {
+        project: projectId,
+        questionKey: questionKey
       },
       {
         project: projectId,
@@ -592,10 +575,10 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
         ...(settings && { settings }),
         ...(isCustom !== undefined && { isCustom: Boolean(isCustom) })
       },
-      { 
-        new: true, 
-        upsert: true, 
-        runValidators: true 
+      {
+        new: true,
+        upsert: true,
+        runValidators: true
       }
     );
 
@@ -605,7 +588,7 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
   // Optionally update project's questionsStatus
   const allAnswered = savedQuestions.every(q => q.status === 'answered');
   const anyAnswered = savedQuestions.some(q => q.status === 'answered');
-  
+
   let questionsStatus = 'pending';
   if (allAnswered) {
     questionsStatus = 'completed';
@@ -615,11 +598,116 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
 
   await Project.findByIdAndUpdate(
     projectId,
-    { 
+    {
       questionsStatus,
       ...(allAnswered && { questionsCompletedAt: new Date() })
     }
   );
+
+  // ===== NEW: Generate PDFs if requested =====
+  let pdfResults = null;
+  if (generatePDFs && savedQuestions.length > 0) {
+    try {
+      // Import both PDF generators
+      const PDFGenerator = require('../utils/pdfGenerator'); // Maya Business Club
+      const AIStructorPDFGenerator = require('../utils/aistructorpdfgenerator'); // AI Structor
+      
+      // Generate both PDFs in parallel for better performance
+      const [projectInfoPDF, aiAnalysisPDF] = await Promise.allSettled([
+        // 1. Generate Maya Business Club Project Information PDF
+        PDFGenerator.generateProjectInfo(project, savedQuestions),
+        
+        // 2. Generate AI Structor Analysis PDF (if you have AI analysis data)
+        // First, you might need to generate or get AI analysis data
+        (async () => {
+          // For now, let's assume you have or generate AI analysis data
+          const aiAnalysisData = {
+            executiveSummary: "AI analysis of project requirements and structure.",
+            confidence: 85,
+            complexity: "Medium",
+            recommendations: [
+              {
+                title: "Optimize Architecture",
+                description: "Consider implementing microservices architecture for better scalability."
+              },
+              {
+                title: "Security Enhancement",
+                description: "Add additional security layers for user authentication."
+              }
+            ],
+            risks: [
+              {
+                description: "Potential performance bottlenecks in database queries",
+                severity: "Medium",
+                mitigation: "Implement query optimization and indexing"
+              }
+            ],
+            technicalRequirements: "The project requires modern web technologies including Node.js, React, and MongoDB."
+          };
+          
+          return AIStructorPDFGenerator.generateAIAnalysisReport(project, aiAnalysisData);
+        })()
+      ]);
+      
+      // Process results
+      const documents = [];
+      
+      // Handle Project Info PDF result
+      if (projectInfoPDF.status === 'fulfilled' && projectInfoPDF.value) {
+        documents.push({
+          type: 'project-info',
+          filename: projectInfoPDF.value.filename,
+          url: projectInfoPDF.value.url,
+          generatedAt: new Date(),
+          documentId: projectInfoPDF.value.documentId
+        });
+        console.log('✅ Project Info PDF generated:', projectInfoPDF.value.filename);
+      } else {
+        console.error('❌ Failed to generate Project Info PDF:', projectInfoPDF.reason);
+      }
+      
+      // Handle AI Analysis PDF result
+      if (aiAnalysisPDF.status === 'fulfilled' && aiAnalysisPDF.value) {
+        documents.push({
+          type: 'ai-analysis',
+          filename: aiAnalysisPDF.value.filename,
+          url: aiAnalysisPDF.value.url,
+          generatedAt: new Date(),
+          documentId: aiAnalysisPDF.value.documentId
+        });
+        console.log('✅ AI Analysis PDF generated:', aiAnalysisPDF.value.filename);
+      } else {
+        console.error('❌ Failed to generate AI Analysis PDF:', aiAnalysisPDF.reason);
+      }
+      
+      // Save PDF info to project
+      if (documents.length > 0) {
+        await Project.findByIdAndUpdate(projectId, {
+          $push: {
+            documents: {
+              $each: documents
+            }
+          },
+          lastPDFGeneration: new Date()
+        });
+      }
+      
+      pdfResults = {
+        success: true,
+        documents: documents,
+        generatedCount: documents.length
+      };
+      
+    } catch (pdfError) {
+      console.error('❌ Error in PDF generation process:', pdfError);
+      // Don't fail the entire request if PDF generation fails
+      pdfResults = {
+        success: false,
+        error: pdfError.message,
+        generatedCount: 0
+      };
+    }
+  }
 
   res.status(200).json({
     status: 'success',
@@ -629,7 +717,52 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
       questionsStatus,
       count: savedQuestions.length,
       customFieldsCount: savedQuestions.filter(q => q.isCustom).length,
-      standardFieldsCount: savedQuestions.filter(q => !q.isCustom).length
+      standardFieldsCount: savedQuestions.filter(q => !q.isCustom).length,
+      ...(pdfResults && {
+        pdfs: pdfResults.success ? {
+          generated: pdfResults.generatedCount,
+          documents: pdfResults.documents
+        } : { error: pdfResults.error },
+        pdfGenerationSuccess: pdfResults.success
+      }),
+      projectInfo: {
+        id: project._id,
+        title: project.title,
+        clientName: project.client?.name,
+        questionsCompletedAt: allAnswered ? new Date() : null
+      }
+    }
+  });
+});
+
+const deleteProject = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
+
+  const project = await Project.findOneAndUpdate(
+    { _id: id }, // Wrap id in a query object
+    { isDeleted: true },
+    { new: true }
+  );
+
+  if (!project) {
+    return next(new AppError('Project not found', 404));
+  }
+
+  // Optional: Check if project was already deleted
+  if (project.isDeleted) {
+    return res.status(200).json({
+      status: 'success',
+      message: 'Project was already deleted',
+      data: {
+        project
+      }
+    });
+  }
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      project
     }
   });
 });
@@ -642,5 +775,6 @@ module.exports = {
   getAllProjects,
   restoreProject,
   getQuestionsByProject,
-  createOrUpdateQuestions
+  createOrUpdateQuestions,
+  deleteProject
 };

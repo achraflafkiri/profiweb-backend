@@ -8,6 +8,8 @@ const authRouter = require("./routes/auth.routes");
 const adminRouter = require("./routes/admin.routes");
 const projectsRouter = require("./routes/project.routes");
 const clientsRouter = require("./routes/client.routes");
+const templatesRouter = require("./routes/template.routes");
+const pdfRouter = require("./routes/pdf.routes");
 
 const handleErrors = require("./middlewares/handleErrors");
 const cors = require("cors");
@@ -52,6 +54,8 @@ app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/admins", adminRouter);
 app.use("/api/v1/projects", projectsRouter);
 app.use("/api/v1/clients", clientsRouter);
+app.use("/api/v1/templates", templatesRouter);
+app.use("/api/v1/pdfs", pdfRouter);
 
 // Error handling
 app.use(handleErrors); 
