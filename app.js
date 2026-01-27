@@ -84,11 +84,15 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 8090;
-
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
-  console.log('✅ Available routes:');
   console.table(expressListEndpoints(app));
 });
+
+// app.listen(PORT, () => {
+//   console.log(`Server running on http://localhost:${PORT}`);
+//   console.log('✅ Available routes:');
+//   console.table(expressListEndpoints(app));
+// });
 
 module.exports = app;
