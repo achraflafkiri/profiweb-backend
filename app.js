@@ -3,6 +3,7 @@ const dotenv = require("dotenv");
 const connectDB = require("./config/db");
 const bodyParser = require("body-parser");
 const expressListEndpoints = require('express-list-endpoints');
+const path = require('path');
 
 const authRouter = require("./routes/auth.routes");
 const adminRouter = require("./routes/admin.routes");
@@ -43,6 +44,11 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
+// ===== ADD THIS: Serve static files from uploads directory =====
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+console.log('📁 Static files served from:', path.join(__dirname, 'uploads'));
+// ===== END OF ADDITION =====
+
 // Connect to database
 connectDB();
 
@@ -57,7 +63,7 @@ app.use("/api/v1/projects", projectsRouter);
 app.use("/api/v1/clients", clientsRouter);
 app.use("/api/v1/templates", templatesRouter);
 app.use("/api/v1/pdfs", pdfRouter);
-app.use("/api/v1/folder", folderRouter);
+app.use("/api/v1/folders", folderRouter);
 
 // Error handling
 app.use(handleErrors); 

@@ -497,14 +497,14 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
     const path = require('path');
 
     // Filter documents that are PDFs and delete them from filesystem
-    const pdfDocuments = project.documents.filter(doc => 
+    const pdfDocuments = project.documents.filter(doc =>
       doc.filename && doc.filename.endsWith('.pdf')
     );
 
     for (const doc of pdfDocuments) {
       try {
         const filePath = path.join(__dirname, '..', 'uploads', 'pdfs', doc.filename);
-        
+
         if (fs.existsSync(filePath)) {
           fs.unlinkSync(filePath);
           console.log(`🗑️ Deleted old PDF: ${doc.filename}`);
@@ -659,55 +659,94 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
       // Import both PDF generators
       const PDFGenerator = require('../utils/pdfGenerator'); // Maya Business Club
       const AIStructorPDFGenerator = require('../utils/aistructorpdfgenerator'); // AI Structor
-      
+
       // Generate both PDFs in parallel for better performance
       const [projectInfoPDF, aiAnalysisPDF] = await Promise.allSettled([
         // 1. Generate Maya Business Club Project Information PDF
         PDFGenerator.generateProjectInfo(project, savedQuestions),
+        // 2. Generate AI Structor PDF
         AIStructorPDFGenerator.generateAiInstructions(project, savedQuestions)
-
-        // 2. Generate AI Structor Analysis PDF
-        // (async () => {
-        //   // const aiAnalysisData = {
-        //   //   docTitle: "AI INSTRUCTIONS FOR WEBSITE CONTENT (BINDING)",
-        //   //   title1: "1. Role of AI",
-        //   // };
-          
-        //   return 
-        // })()
       ]);
-      
+
+      // ===== NEW: Create Folder and File Records =====
+      const Folder = require('../models/folder.model');
+      const File = require('../models/file.model');
+
+      const folderName = `Project_${project.title}_PDFs`;
+      const userId = req.user.id;
+
+      // Find or create folder
+      let folder = await Folder.findOne({
+        name: folderName,
+        user: userId
+      });
+
+      if (!folder) {
+        folder = await Folder.create({
+          name: folderName,
+          user: userId
+        });
+        console.log(`📁 Created new folder: ${folderName}`);
+      } else {
+        console.log(`📁 Using existing folder: ${folderName}`);
+      }
+
       // Process results
       const documents = [];
-      
+      const fileRecords = [];
+
       // Handle Project Info PDF result
       if (projectInfoPDF.status === 'fulfilled' && projectInfoPDF.value) {
+        const pdfData = projectInfoPDF.value;
+        
         documents.push({
           type: 'doc-infos',
-          filename: projectInfoPDF.value.filename,
-          url: projectInfoPDF.value.url,
+          filename: pdfData.filename,
+          url: pdfData.url,
           generatedAt: new Date(),
-          documentId: projectInfoPDF.value.documentId
+          documentId: pdfData.documentId
         });
-        console.log('✅ Project Info PDF generated:', projectInfoPDF.value.filename);
+
+        // Create File record in database
+        const fileRecord = await File.create({
+          filename: pdfData.filename,
+          path: pdfData.url || `/uploads/pdfs/${pdfData.filename}`,
+          user: userId,
+          folder: folder._id
+        });
+        fileRecords.push(fileRecord);
+
+        console.log('✅ Project Info PDF generated:', pdfData.filename);
       } else {
         console.error('❌ Failed to generate Project Info PDF:', projectInfoPDF.reason);
       }
-      
+
       // Handle AI Analysis PDF result
       if (aiAnalysisPDF.status === 'fulfilled' && aiAnalysisPDF.value) {
+        const pdfData = aiAnalysisPDF.value;
+        
         documents.push({
           type: 'ai-structured',
-          filename: aiAnalysisPDF.value.filename,
-          url: aiAnalysisPDF.value.url,
+          filename: pdfData.filename,
+          url: pdfData.url,
           generatedAt: new Date(),
-          documentId: aiAnalysisPDF.value.documentId
+          documentId: pdfData.documentId
         });
-        console.log('✅ AI Analysis PDF generated:', aiAnalysisPDF.value.filename);
+
+        // Create File record in database
+        const fileRecord = await File.create({
+          filename: pdfData.filename,
+          path: pdfData.url || `/uploads/pdfs/${pdfData.filename}`,
+          user: userId,
+          folder: folder._id
+        });
+        fileRecords.push(fileRecord);
+
+        console.log('✅ AI Analysis PDF generated:', pdfData.filename);
       } else {
         console.error('❌ Failed to generate AI Analysis PDF:', aiAnalysisPDF.reason);
       }
-      
+
       // Save PDF info to project
       if (documents.length > 0) {
         await Project.findByIdAndUpdate(projectId, {
@@ -719,13 +758,22 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
           lastPDFGeneration: new Date()
         });
       }
-      
+
       pdfResults = {
         success: true,
         documents: documents,
-        generatedCount: documents.length
+        generatedCount: documents.length,
+        folder: {
+          id: folder._id,
+          name: folder.name
+        },
+        files: fileRecords.map(file => ({
+          id: file._id,
+          filename: file.filename,
+          path: file.path
+        }))
       };
-      
+
     } catch (pdfError) {
       console.error('❌ Error in PDF generation process:', pdfError);
       // Don't fail the entire request if PDF generation fails
@@ -757,7 +805,9 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
       ...(pdfResults && {
         pdfs: pdfResults.success ? {
           generated: pdfResults.generatedCount,
-          documents: pdfResults.documents
+          documents: pdfResults.documents,
+          folder: pdfResults.folder,
+          files: pdfResults.files
         } : { error: pdfResults.error },
         pdfGenerationSuccess: pdfResults.success
       }),
