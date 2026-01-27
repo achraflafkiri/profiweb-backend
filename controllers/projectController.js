@@ -664,35 +664,17 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
       const [projectInfoPDF, aiAnalysisPDF] = await Promise.allSettled([
         // 1. Generate Maya Business Club Project Information PDF
         PDFGenerator.generateProjectInfo(project, savedQuestions),
-        
+        AIStructorPDFGenerator.generateAiInstructions(project, savedQuestions)
+
         // 2. Generate AI Structor Analysis PDF
-        (async () => {
-          const aiAnalysisData = {
-            executiveSummary: "AI analysis of project requirements and structure.",
-            confidence: 85,
-            complexity: "Medium",
-            recommendations: [
-              {
-                title: "Optimize Architecture",
-                description: "Consider implementing microservices architecture for better scalability."
-              },
-              {
-                title: "Security Enhancement",
-                description: "Add additional security layers for user authentication."
-              }
-            ],
-            risks: [
-              {
-                description: "Potential performance bottlenecks in database queries",
-                severity: "Medium",
-                mitigation: "Implement query optimization and indexing"
-              }
-            ],
-            technicalRequirements: "The project requires modern web technologies including Node.js, React, and MongoDB."
-          };
+        // (async () => {
+        //   // const aiAnalysisData = {
+        //   //   docTitle: "AI INSTRUCTIONS FOR WEBSITE CONTENT (BINDING)",
+        //   //   title1: "1. Role of AI",
+        //   // };
           
-          return AIStructorPDFGenerator.generateAIAnalysisReport(project, aiAnalysisData);
-        })()
+        //   return 
+        // })()
       ]);
       
       // Process results

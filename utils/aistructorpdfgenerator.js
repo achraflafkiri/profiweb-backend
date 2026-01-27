@@ -1,729 +1,774 @@
-// utils/aistructorpdfgenerator.js
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
-const { v4: uuidv4 } = require('uuid');
-const axios = require('axios');
+const https = require('https');
+const http = require('http');
 
-class AIStructorPDFGenerator {
+class PDFGenerator {
     constructor() {
         this.uploadsDir = path.join(__dirname, '../uploads/pdfs');
-
-        // Create directory if it doesn't exist
         if (!fs.existsSync(this.uploadsDir)) {
             fs.mkdirSync(this.uploadsDir, { recursive: true });
-            console.log(`Created directory: ${this.uploadsDir}`);
         }
 
-        // Brand colors for AI Structor
-        this.brandColors = {
-            primary: '#4f46e5',      // Indigo
-            secondary: '#7c3aed',    // Violet
-            accent: '#06b6d4',       // Cyan
-            text: '#1f2937',
-            lightGray: '#f3f4f6'
+        // Professional page layout constants
+        this.PAGE_MARGIN = {
+            top: 60,
+            bottom: 60,
+            left: 60,
+            right: 60
+        };
+        this.CONTENT_PADDING = 20;
+        this.HEADER_HEIGHT = 100;
+        
+        // Professional color scheme
+        this.COLORS = {
+            primary: '#1a365d',      // Deep blue
+            secondary: '#2c5282',    // Medium blue
+            accent: '#4299e1',       // Light blue
+            text: '#2d3748',         // Dark gray
+            textLight: '#4a5568',    // Medium gray
+            background: '#f7fafc',   // Very light gray
+            border: '#e2e8f0',       // Light border
+            success: '#2f855a',      // Green for answers
+            headerBg: '#1a202c'      // Almost black for header
         };
     }
 
     /**
-     * Add AI Structor header with text-based logo
+     * Generate a professional project information PDF
      */
-    async addHeader(doc, title) {
-        try {
-            // Save current state
-            doc.save();
+    generateAiInstructions(project, questions) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                console.log("📄 PDF Generator called with:");
+                console.log("   Project ID:", project?._id);
+                console.log("   Project Title:", project?.title);
+                console.log("   Questions count:", questions?.length || 0);
 
-            // Header background with gradient effect
-            const gradient = doc.linearGradient(0, 0, doc.page.width, 0)
-                .stop(0, this.brandColors.primary)
-                .stop(1, this.brandColors.secondary);
+                const filename = `ai-${Date.now()}.pdf`;
+                const filePath = path.join(this.uploadsDir, filename);
 
-            doc.rect(0, 0, doc.page.width, 100).fill(gradient);
-
-            // Reset fill color and opacity
-            doc.fillColor('#ffffff').opacity(1);
-
-            // Add text logo on the left
-            const logoX = 40;
-            const logoY = 15;
-
-            doc.fontSize(24)
-                .fillColor('#ffffff')
-                .font('Helvetica-Bold')
-                .text('AI STRUCTOR', logoX, logoY + 20, {
-                    width: 300,
-                    align: 'left'
+                const doc = new PDFDocument({
+                    size: 'A4',
+                    margin: 0,
+                    bufferPages: true // Enable page numbering
                 });
 
-            doc.fontSize(12)
-                .fillColor('#ffffff')
-                .font('Helvetica')
-                .text('Advanced AI Project Structuring', logoX, logoY + 45, {
-                    width: 300,
-                    align: 'left'
+                const stream = fs.createWriteStream(filePath);
+                doc.pipe(stream);
+
+                // ===== PAGE 1: AI INSTRUCTIONS =====
+                console.log("📝 Adding AI instructions to page 1...");
+                await this.addProfessionalHeader(doc, 'AI INSTRUCTIONS FOR WEBSITE CONTENT (BINDING)');
+                this.addAiInstructionsContent(doc);
+
+                // ===== PAGE 2: PROJECT INFORMATION =====
+                console.log("📝 Adding project information to page 2...");
+                doc.addPage();
+                await this.addProfessionalHeader(doc, 'PROJECT INFORMATION');
+                this.addProjectInformation(doc, project);
+
+                // ===== PAGE 3: QUESTIONS & ANSWERS =====
+                console.log("📝 Adding questions to page 3...");
+                doc.addPage();
+                await this.addProfessionalHeader(doc, 'PROJECT QUESTIONS');
+                this.addQuestionsSection(doc, questions);
+
+                // Add page numbers to all pages
+                const pageCount = doc.bufferedPageRange().count;
+                for (let i = 0; i < pageCount; i++) {
+                    doc.switchToPage(i);
+                    this.addPageNumber(doc, i + 1, pageCount);
+                }
+
+                doc.end();
+
+                stream.on('finish', () => {
+                    console.log("✅ PDF created successfully:", filename);
+                    resolve({
+                        filename,
+                        filePath,
+                        url: `/uploads/pdfs/${filename}`,
+                        documentId: `doc_${Date.now()}`,
+                        pages: pageCount,
+                        message: 'Professional PDF created successfully!'
+                    });
                 });
 
-            // Add document title on the right
-            const titleX = doc.page.width - 250;
-            const titleY = 35;
-
-            doc.fontSize(20)
-                .fillColor('#ffffff')
-                .font('Helvetica-Bold')
-                .text(title, titleX, titleY, {
-                    width: 200,
-                    align: 'right'
+                stream.on('error', (error) => {
+                    console.error("❌ Stream error:", error);
+                    reject(error);
                 });
 
-            // Add "AI-Powered Analysis" subtitle on right
-            doc.fontSize(12)
-                .fillColor('#ffffff')
-                .font('Helvetica-Oblique')
-                .text('AI-Powered Analysis', titleX, titleY + 25, {
-                    width: 200,
-                    align: 'right'
-                });
-
-            // Add decorative accent line
-            doc.save();
-            doc.strokeColor(this.brandColors.accent)
-                .opacity(0.8)
-                .lineWidth(2)
-                .moveTo(50, 95)
-                .lineTo(doc.page.width - 50, 95)
-                .stroke();
-            doc.restore();
-
-            // Add AI icon/emoji
-            doc.fontSize(16)
-                .fillColor('#ffffff')
-                .text('', doc.page.width - 60, 22, {
-                    width: 30,
-                    align: 'left'
-                });
-
-            // Restore state and set position for content
-            doc.restore();
-            doc.fillColor(this.brandColors.text).opacity(1);
-            doc.x = 50; // Reset x position
-            doc.y = 125; // Set y position below header
-
-        } catch (error) {
-            console.error('Error in AI Structor addHeader:', error);
-            // Fallback header
-            doc.rect(0, 0, doc.page.width, 90)
-                .fill(this.brandColors.primary);
-
-            doc.fontSize(26)
-                .fillColor('#ffffff')
-                .font('Helvetica-Bold')
-                .text('🤖 AI STRUCTOR', 50, 25, {
-                    width: 300,
-                    align: 'left'
-                });
-
-            doc.fontSize(18)
-                .fillColor('#ffffff')
-                .font('Helvetica-Bold')
-                .text(title, doc.page.width - 250, 30, {
-                    width: 200,
-                    align: 'right'
-                });
-
-            doc.fillColor(this.brandColors.text).opacity(1);
-            doc.x = 50;
-            doc.y = 110;
-        }
+            } catch (error) {
+                console.error('❌ Error generating PDF:', error);
+                reject(error);
+            }
+        });
     }
 
     /**
-     * Add professional footer for AI Structor
+     * Add AI Instructions content (PAGE 1)
      */
-    addFooter(doc, pageText) {
-        try {
-            const bottomY = doc.page.height - 50;
+    addAiInstructionsContent(doc) {
+        const pageWidth = 595.28;
+        const contentWidth = pageWidth - this.PAGE_MARGIN.left - this.PAGE_MARGIN.right;
 
-            doc.save();
-
-            // Top line
-            doc.strokeColor(this.brandColors.lightGray)
-                .lineWidth(0.5)
-                .moveTo(50, bottomY - 25)
-                .lineTo(doc.page.width - 50, bottomY - 25)
-                .stroke();
-
-            // AI Structor tagline (left)
-            doc.fontSize(9)
-                .fillColor(this.brandColors.primary)
-                .font('Helvetica-Bold')
-                .text('AI-Powered Project Analysis', 50, bottomY - 20, {
-                    width: 180,
-                    align: 'left'
-                });
-
-            // Page info (center left)
-            doc.fontSize(9)
-                .fillColor('#6b7280')
-                .font('Helvetica')
-                .text(pageText, 250, bottomY - 20, {
-                    width: 200,
-                    align: 'left'
-                });
-
-            // Page number (center)
-            const pageNumber = `Page ${doc.bufferedPageRange().start + 1}`;
-            const centerX = doc.page.width / 2;
-            doc.text(pageNumber, centerX - 50, bottomY - 20, {
-                width: 100,
-                align: 'center'
+        // Main title
+        doc.fontSize(20)
+            .font('Helvetica-Bold')
+            .fillColor(this.COLORS.primary)
+            .text('AI INSTRUCTIONS FOR WEBSITE CONTENT (BINDING)', {
+                align: 'center',
+                width: contentWidth
             });
 
-            // Confidential notice (right)
-            doc.fontSize(9)
-                .fillColor('#ef4444')
+        doc.moveDown(2);
+
+        // Section 1: Role of AI
+        this.addSectionHeader(doc, '1. Role of AI', contentWidth);
+        doc.moveDown(0.8);
+
+        doc.fontSize(11)
+            .font('Helvetica')
+            .fillColor(this.COLORS.text)
+            .text('You are a rules-based content generator for websites. You do not make your own decisions and do not add any content that does not come from the information sheet. You work strictly according to these instructions.', {
+                align: 'left',
+                width: contentWidth,
+                lineGap: 4
+            });
+
+        doc.moveDown(2);
+
+        // Divider line
+        doc.moveTo(this.PAGE_MARGIN.left, doc.y)
+            .lineTo(this.PAGE_MARGIN.left + contentWidth, doc.y)
+            .lineWidth(0.5)
+            .strokeColor(this.COLORS.border)
+            .stroke();
+
+        doc.moveDown(2);
+
+        // Section 2: General rules
+        this.addSectionHeader(doc, '2. General rules (mandatory)', contentWidth);
+        doc.moveDown(0.8);
+
+        const rules = [
+            '1. Use only the information from the information sheet.',
+            '2. Make no assumptions, additions, or interpretations.',
+            '3. Do not use marketing claims (e.g., "leading", "best", "No. 1").',
+            '4. Write objectively, professionally, and clearly.',
+            '5. If information is missing or unclear: → STOP and report:\n   **INFORMATION MISSING - please add it.**'
+        ];
+
+        rules.forEach(rule => {
+            const bulletY = doc.y;
+            
+            // Bullet point
+            doc.circle(this.PAGE_MARGIN.left + 5, bulletY + 6, 3)
+                .fillColor(this.COLORS.accent)
+                .fill();
+
+            // Rule text
+            doc.fontSize(11)
+                .font('Helvetica')
+                .fillColor(this.COLORS.text)
+                .text(rule,
+                    this.PAGE_MARGIN.left + 20,
+                    bulletY,
+                    {
+                        width: contentWidth - 25,
+                        lineGap: 3
+                    });
+
+            doc.moveDown(0.6);
+        });
+
+        doc.moveDown(2);
+
+        // Divider line
+        doc.moveTo(this.PAGE_MARGIN.left, doc.y)
+            .lineTo(this.PAGE_MARGIN.left + contentWidth, doc.y)
+            .lineWidth(0.5)
+            .strokeColor(this.COLORS.border)
+            .stroke();
+
+        doc.moveDown(2);
+
+        // Section 3: Working methods
+        this.addSectionHeader(doc, '3. Working methods (very important)', contentWidth);
+        doc.moveDown(0.8);
+
+        const methods = [
+            '- You always work page by page.',
+            '- You only ever create one page completely.',
+            '- After each page, you wait for approval from the operator.',
+            '- You only continue working after receiving positive feedback.'
+        ];
+
+        methods.forEach(method => {
+            const bulletY = doc.y;
+            
+            // Dash bullet
+            doc.fontSize(11)
                 .font('Helvetica-Bold')
-                .text('CONFIDENTIAL - AI GENERATED', doc.page.width - 220, bottomY - 20, {
-                    width: 170,
+                .fillColor(this.COLORS.accent)
+                .text('•', this.PAGE_MARGIN.left + 5, bulletY, {
+                    width: 10
+                });
+
+            // Method text
+            doc.fontSize(11)
+                .font('Helvetica')
+                .fillColor(this.COLORS.text)
+                .text(method,
+                    this.PAGE_MARGIN.left + 20,
+                    bulletY,
+                    {
+                        width: contentWidth - 25,
+                        lineGap: 3
+                    });
+
+            doc.moveDown(0.5);
+        });
+
+        doc.moveDown(3);
+
+        // Footer note
+        // doc.fontSize(9)
+        //     .font('Helvetica-Oblique')
+        //     .fillColor(this.COLORS.textLight)
+        //     .text('These instructions are binding and must be followed for all content generation →',
+        //         this.PAGE_MARGIN.left,
+        //         750,
+        //         {
+        //             width: contentWidth,
+        //             align: 'right'
+        //         });
+    }
+
+    /**
+     * Add professional project information section (PAGE 2)
+     */
+    addProjectInformation(doc, project) {
+        if (!project) {
+            doc.fontSize(14)
+                .fillColor(this.COLORS.text)
+                .text('No project information available.');
+            return;
+        }
+
+        const pageWidth = 595.28;
+        const contentWidth = pageWidth - this.PAGE_MARGIN.left - this.PAGE_MARGIN.right;
+
+        // ===== PROJECT TITLE =====
+        doc.fontSize(28)
+            .font('Helvetica-Bold')
+            .fillColor(this.COLORS.primary)
+            .text(project.title || 'Untitled Project', {
+                align: 'left',
+                width: contentWidth
+            });
+
+        doc.moveDown(0.3);
+
+        // Subtle underline
+        doc.moveTo(this.PAGE_MARGIN.left, doc.y)
+            .lineTo(this.PAGE_MARGIN.left + 80, doc.y)
+            .lineWidth(3)
+            .strokeColor(this.COLORS.accent)
+            .stroke();
+
+        doc.moveDown(2);
+
+        // ===== DESCRIPTION SECTION =====
+        if (project.description) {
+            this.addSectionHeader(doc, 'Project Description', contentWidth);
+            doc.moveDown(0.8);
+
+            // Description in elegant box
+            const descBoxY = doc.y;
+            const descHeight = Math.min(
+                doc.heightOfString(project.description, {
+                    width: contentWidth - 40,
+                    align: 'justify'
+                }) + 30,
+                250
+            );
+
+            doc.roundedRect(this.PAGE_MARGIN.left, descBoxY, contentWidth, descHeight, 6)
+                .fillColor('#ffffff')
+                .fill()
+                .strokeColor(this.COLORS.border)
+                .lineWidth(1)
+                .stroke();
+
+            // Left accent border
+            doc.rect(this.PAGE_MARGIN.left, descBoxY, 4, descHeight)
+                .fillColor(this.COLORS.accent)
+                .fill();
+
+            doc.fontSize(11)
+                .font('Helvetica')
+                .fillColor(this.COLORS.text)
+                .text(project.description,
+                    this.PAGE_MARGIN.left + 24,
+                    descBoxY + 15,
+                    {
+                        width: contentWidth - 48,
+                        align: 'justify',
+                        lineGap: 4
+                    });
+
+            doc.y = descBoxY + descHeight + 20;
+        }
+
+        doc.moveDown(1.5);
+
+        // ===== PROJECT DETAILS IN VERTICAL LIST =====
+        this.addSectionHeader(doc, 'Project Details', contentWidth);
+        doc.moveDown(1);
+
+        const projectDetails = [
+            { label: 'Client', value: project.client?.name || 'Not specified' },
+            { label: 'Category', value: project.category || 'Not specified' },
+            { label: 'Priority', value: project.priority || 'Not specified' },
+            { label: 'Start Date', value: project.startDate ? new Date(project.startDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Not specified' },
+            { label: 'End Date', value: project.endDate ? new Date(project.endDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Not specified' },
+            { label: 'Budget', value: `${project.budget || 0} ${project.currency || 'MAD'}` },
+        ];
+
+        // Vertical list layout (like ul > li)
+        projectDetails.forEach((detail, index) => {
+            const itemY = doc.y;
+
+            // Bullet point
+            doc.circle(this.PAGE_MARGIN.left + 10, itemY + 6, 2.5)
+                .fillColor(this.COLORS.accent)
+                .fill();
+
+            // Label (bold)
+            doc.fontSize(11)
+                .font('Helvetica-Bold')
+                .fillColor(this.COLORS.text)
+                .text(`${detail.label}:`, this.PAGE_MARGIN.left + 25, itemY, {
+                    continued: true
+                })
+                // Value (normal, on same line)
+                .font('Helvetica')
+                .fillColor(this.COLORS.textLight)
+                .text(` ${detail.value}`, {
+                    width: contentWidth - 35
+                });
+
+            doc.moveDown(0.6);
+        });
+
+        // Add footer note for page 2
+        doc.fontSize(9)
+            .font('Helvetica-Oblique')
+            .fillColor(this.COLORS.textLight)
+            .text('Continue to next page for project questions and answers →',
+                this.PAGE_MARGIN.left,
+                780,
+                {
+                    width: contentWidth,
+                    align: 'right'
+                });
+    }
+
+    /**
+     * Add questions section (PAGE 3+)
+     */
+    addQuestionsSection(doc, questions) {
+        const pageWidth = 595.28;
+        const contentWidth = pageWidth - this.PAGE_MARGIN.left - this.PAGE_MARGIN.right;
+
+        if (!questions || questions.length === 0) {
+            doc.fontSize(12)
+                .fillColor(this.COLORS.textLight)
+                .text('No questions have been added to this project yet.', {
+                    align: 'center',
+                    width: contentWidth
+                });
+            return;
+        }
+
+        // Group questions by section
+        const questionsBySection = {};
+        questions.forEach((q) => {
+            const section = q.section || 'general';
+            if (!questionsBySection[section]) {
+                questionsBySection[section] = {
+                    sectionName: q.sectionName || 'General Information',
+                    questions: []
+                };
+            }
+            questionsBySection[section].questions.push(q);
+        });
+
+        // Render each section
+        Object.keys(questionsBySection).forEach((sectionKey, sectionIndex) => {
+            const section = questionsBySection[sectionKey];
+
+            // Check if we need a new page
+            this.checkPageBreakQuestions(doc, 100);
+
+            // Section header
+            this.addSectionHeader(doc, section.sectionName, contentWidth, true);
+            doc.moveDown(0.8);
+
+            // Questions in this section
+            section.questions.forEach((question, qIndex) => {
+                this.checkPageBreakQuestions(doc, 80);
+
+                // Question card
+                const cardY = doc.y;
+                const questionHeight = this.calculateQuestionHeight(doc, question, contentWidth);
+                
+                // Card background
+                doc.roundedRect(this.PAGE_MARGIN.left, cardY, contentWidth, questionHeight, 5)
+                    .fillColor('#ffffff')
+                    .fill()
+                    .strokeColor(this.COLORS.border)
+                    .lineWidth(0.5)
+                    .stroke();
+
+                // Question number badge
+                doc.circle(this.PAGE_MARGIN.left + 20, cardY + 20, 14)
+                    .fillColor(this.COLORS.secondary)
+                    .fill();
+
+                doc.fontSize(11)
+                    .font('Helvetica-Bold')
+                    .fillColor('#ffffff')
+                    .text(`${qIndex + 1}`,
+                        this.PAGE_MARGIN.left + 15,
+                        cardY + 14,
+                        { width: 10, align: 'center' });
+
+                // Question text
+                doc.fontSize(11)
+                    .font('Helvetica-Bold')
+                    .fillColor(this.COLORS.text)
+                    .text(question.question,
+                        this.PAGE_MARGIN.left + 45,
+                        cardY + 14,
+                        { width: contentWidth - 60 });
+
+                const answerY = cardY + 38;
+
+                // Handle different answer types
+                if (question.type === 'brand-colors' || 
+                    (question.answer && question.answer.includes('#'))) {
+                    this.displayBrandColorsProfessional(doc, question.answer, answerY, contentWidth);
+                } else {
+                    // Regular text answer
+                    const answerText = question.answer || 'Not answered yet';
+                    const answerColor = question.answer ? this.COLORS.success : this.COLORS.textLight;
+
+                    // Answer background
+                    doc.roundedRect(
+                        this.PAGE_MARGIN.left + 45,
+                        answerY - 4,
+                        contentWidth - 60,
+                        questionHeight - 48,
+                        3
+                    )
+                        .fillColor(this.COLORS.background)
+                        .fill();
+
+                    doc.fontSize(10)
+                        .font('Helvetica')
+                        .fillColor(answerColor)
+                        .text(answerText,
+                            this.PAGE_MARGIN.left + 55,
+                            answerY + 4,
+                            {
+                                width: contentWidth - 80,
+                                lineGap: 2
+                            });
+                }
+
+                doc.y = cardY + questionHeight + 15;
+            });
+
+            doc.moveDown(1);
+        });
+
+        // Add generation timestamp
+        doc.moveDown(2);
+        doc.fontSize(9)
+            .font('Helvetica-Oblique')
+            .fillColor(this.COLORS.textLight)
+            .text(`Document generated on ${new Date().toLocaleString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            })}`, {
+                align: 'center',
+                width: contentWidth
+            });
+    }
+
+    /**
+     * Calculate question card height dynamically
+     */
+    calculateQuestionHeight(doc, question, contentWidth) {
+        const questionHeight = doc.heightOfString(question.question, {
+            width: contentWidth - 60,
+            font: 'Helvetica-Bold',
+            fontSize: 11
+        });
+
+        let answerHeight = 30;
+        if (question.answer) {
+            if (question.type === 'brand-colors' || question.answer.includes('#')) {
+                answerHeight = 50; // Fixed height for color swatches
+            } else {
+                answerHeight = Math.max(30, doc.heightOfString(question.answer, {
+                    width: contentWidth - 80,
+                    font: 'Helvetica',
+                    fontSize: 10
+                }) + 16);
+            }
+        }
+
+        return Math.max(70, questionHeight + answerHeight + 30);
+    }
+
+    /**
+     * Professional brand colors display
+     */
+    displayBrandColorsProfessional(doc, colorsString, startY, contentWidth) {
+        try {
+            const colors = colorsString.split(',').map(color => color.trim()).filter(color => color);
+
+            if (colors.length === 0) {
+                doc.fontSize(10)
+                    .font('Helvetica')
+                    .fillColor(this.COLORS.textLight)
+                    .text('No colors specified',
+                        this.PAGE_MARGIN.left + 55,
+                        startY + 4);
+                return;
+            }
+
+            // Background for colors
+            doc.roundedRect(
+                this.PAGE_MARGIN.left + 45,
+                startY - 4,
+                contentWidth - 60,
+                60,
+                3
+            )
+                .fillColor(this.COLORS.background)
+                .fill();
+
+            // Display colors horizontally
+            let currentX = this.PAGE_MARGIN.left + 60;
+            const swatchSize = 32;
+            const spacing = 15;
+
+            colors.forEach((colorHex, index) => {
+                if (index > 0 && index % 8 === 0) {
+                    // New row if too many colors
+                    currentX = this.PAGE_MARGIN.left + 60;
+                    startY += swatchSize + 10;
+                }
+
+                // Color swatch with shadow effect
+                doc.roundedRect(currentX, startY + 2, swatchSize, swatchSize, 4)
+                    .fillColor(colorHex)
+                    .fill()
+                    .strokeColor('#000000')
+                    .lineWidth(1)
+                    .opacity(0.2)
+                    .stroke()
+                    .opacity(1);
+
+                // Hex code below swatch
+                doc.fontSize(7)
+                    .font('Helvetica')
+                    .fillColor(this.COLORS.textLight)
+                    .text(colorHex,
+                        currentX - 5,
+                        startY + swatchSize + 6,
+                        { width: swatchSize + 10, align: 'center' });
+
+                currentX += swatchSize + spacing;
+            });
+
+        } catch (error) {
+            console.error('Error displaying brand colors:', error);
+            doc.fontSize(10)
+                .font('Helvetica')
+                .fillColor(this.COLORS.textLight)
+                .text(colorsString || 'Not answered yet',
+                    this.PAGE_MARGIN.left + 55,
+                    startY + 4);
+        }
+    }
+
+    /**
+     * Download image from URL
+     */
+    downloadImage(url) {
+        return new Promise((resolve, reject) => {
+            const protocol = url.startsWith('https') ? https : http;
+
+            console.log(`⬇️ Downloading logo from: ${url}`);
+
+            protocol.get(url, (response) => {
+                if (response.statusCode !== 200) {
+                    console.error(`❌ Failed to download image: ${response.statusCode}`);
+                    reject(new Error(`Failed to download image: ${response.statusCode}`));
+                    return;
+                }
+
+                const chunks = [];
+                response.on('data', (chunk) => chunks.push(chunk));
+                response.on('end', () => {
+                    const buffer = Buffer.concat(chunks);
+                    console.log(`✅ Logo downloaded successfully (${buffer.length} bytes)`);
+                    resolve(buffer);
+                });
+            }).on('error', (error) => {
+                console.error(`❌ Network error downloading logo:`, error);
+                reject(error);
+            });
+        });
+    }
+
+    /**
+     * Add professional header with logo and title
+     */
+    async addProfessionalHeader(doc, pageTitle) {
+        const pageWidth = 595.28;
+        const headerHeight = this.HEADER_HEIGHT;
+
+        // Modern gradient header background
+        doc.rect(0, 0, pageWidth, headerHeight)
+            .fillColor(this.COLORS.headerBg)
+            .fill();
+
+        // Subtle accent line at bottom of header
+        doc.rect(0, headerHeight - 3, pageWidth, 3)
+            .fillColor(this.COLORS.accent)
+            .fill();
+
+        try {
+            // Download and add logo on LEFT side
+            const logoUrl = 'https://mayabusinessclub.com/wp-content/uploads/2025/11/logo-horizontal-maya-vct.png';
+            const logoBuffer = await this.downloadImage(logoUrl);
+
+            const logoWidth = 130;
+            const logoHeight = 45;
+            const logoX = this.PAGE_MARGIN.left;
+            const logoY = (headerHeight - logoHeight - 3) / 2;
+
+            doc.image(logoBuffer, logoX, logoY, {
+                width: logoWidth,
+                height: logoHeight
+            });
+
+            console.log('✅ Logo added to PDF header');
+        } catch (error) {
+            console.warn('⚠️ Could not load logo:', error.message);
+
+            // Placeholder if logo fails
+            doc.fillColor('#ffffff')
+                .font('Helvetica-Bold')
+                .fontSize(14)
+                .text('Maya Business Club', this.PAGE_MARGIN.left, headerHeight / 2 - 7);
+        }
+
+        // Add page title on RIGHT side
+        doc.fillColor('#ffffff')
+            .font('Helvetica-Bold')
+            .fontSize(20)
+            .text(pageTitle,
+                pageWidth - this.PAGE_MARGIN.right - 220,
+                headerHeight / 2 - 13,
+                {
+                    width: 220,
                     align: 'right'
                 });
 
-            // Bottom line
-            doc.strokeColor(this.brandColors.accent)
-                .lineWidth(0.5)
-                .opacity(0.5)
-                .moveTo(50, bottomY - 5)
-                .lineTo(doc.page.width - 50, bottomY - 5)
-                .stroke();
-
-            doc.restore();
-
-        } catch (error) {
-            console.error('Error in AI Structor addFooter:', error);
-        }
+        // Set starting position for content
+        doc.x = this.PAGE_MARGIN.left;
+        doc.y = headerHeight + 40;
     }
 
     /**
-     * Generate AI Structor Analysis Report
+     * Add page number footer
      */
-    generateAIAnalysisReport(projectData, aiAnalysis) {
-        return new Promise(async (resolve, reject) => {
-            try {
-                const docId = uuidv4();
-                const filename = `ai-analysis-report-${Date.now()}.pdf`;
-                const filePath = path.join(this.uploadsDir, filename);
-
-                const doc = new PDFDocument({
-                    margin: 50,
-                    size: 'A4',
-                    bufferPages: true,
-                    info: {
-                        Title: 'AI Structor Analysis Report',
-                        Author: 'AI Structor System',
-                        Subject: 'AI-Powered Project Analysis',
-                        Keywords: 'AI, Analysis, Project, Structuring',
-                        Creator: 'AI Structor v1.0',
-                        CreationDate: new Date()
-                    }
-                });
-
-                const stream = fs.createWriteStream(filePath);
-                doc.pipe(stream);
-
-                // Header with AI Structor branding
-                await this.addHeader(doc, 'AI Analysis Report');
-                doc.moveDown(1);
-
-                // Executive Summary Section
-                doc.fontSize(18)
-                    .fillColor(this.brandColors.primary)
-                    .font('Helvetica-Bold')
-                    .text('EXECUTIVE SUMMARY', 50, doc.y, {
-                        underline: true,
-                        width: doc.page.width - 100
-                    });
-                doc.moveDown(0.5);
-
-                doc.fontSize(11)
-                    .fillColor(this.brandColors.text)
-                    .font('Helvetica');
-
-                if (aiAnalysis?.executiveSummary) {
-                    doc.text(aiAnalysis.executiveSummary, 50, doc.y, {
-                        align: 'justify',
-                        width: doc.page.width - 100
-                    });
-                } else {
-                    doc.text('No executive summary available from AI analysis.', 50, doc.y, {
-                        width: doc.page.width - 100
-                    });
+    addPageNumber(doc, currentPage, totalPages) {
+        const pageHeight = 841.89;
+        const pageWidth = 595.28;
+        
+        doc.fontSize(9)
+            .font('Helvetica')
+            .fillColor(this.COLORS.textLight)
+            .text(
+                `Page ${currentPage} of ${totalPages}`,
+                this.PAGE_MARGIN.left,
+                pageHeight - this.PAGE_MARGIN.bottom + 20,
+                {
+                    width: pageWidth - this.PAGE_MARGIN.left - this.PAGE_MARGIN.right,
+                    align: 'center'
                 }
-
-                doc.moveDown(2);
-
-                // Project Overview Section
-                doc.fontSize(16)
-                    .fillColor(this.brandColors.primary)
-                    .font('Helvetica-Bold')
-                    .text('PROJECT OVERVIEW', 50, doc.y, {
-                        underline: true,
-                        width: doc.page.width - 100
-                    });
-                doc.moveDown(0.5);
-
-                const overviewData = [
-                    ['Project Title', projectData.title || 'N/A'],
-                    ['Project ID', projectData.id || docId.substring(0, 8)],
-                    ['AI Analysis Date', new Date().toLocaleDateString()],
-                    ['Analysis Confidence', aiAnalysis?.confidence ? `${aiAnalysis.confidence}%` : 'N/A'],
-                    ['Complexity Level', aiAnalysis?.complexity || 'N/A']
-                ];
-
-                overviewData.forEach(([label, value]) => {
-                    doc.font('Helvetica-Bold')
-                        .fillColor(this.brandColors.text)
-                        .text(`${label}: `, 50, doc.y, {
-                            continued: true,
-                            width: doc.page.width - 100
-                        })
-                        .font('Helvetica')
-                        .fillColor(this.brandColors.secondary)
-                        .text(value);
-                    doc.moveDown(0.3);
-                });
-
-                doc.moveDown(2);
-
-                // AI Recommendations Section
-                if (aiAnalysis?.recommendations && aiAnalysis.recommendations.length > 0) {
-                    doc.fontSize(16)
-                        .fillColor(this.brandColors.primary)
-                        .font('Helvetica-Bold')
-                        .text('AI RECOMMENDATIONS', 50, doc.y, {
-                            underline: true,
-                            width: doc.page.width - 100
-                        });
-                    doc.moveDown(0.5);
-
-                    aiAnalysis.recommendations.forEach((rec, index) => {
-                        // Check if we need a new page
-                        if (doc.y > doc.page.height - 150) {
-                            doc.addPage();
-                            doc.x = 50;
-                            doc.y = 50;
-                        }
-
-                        // Recommendation card style
-                        const cardY = doc.y;
-                        doc.save();
-                        doc.rect(50, cardY, doc.page.width - 100, 60)
-                            .fillOpacity(0.1)
-                            .fill(this.brandColors.lightGray);
-                        doc.restore();
-
-                        doc.fontSize(12)
-                            .fillColor(this.brandColors.primary)
-                            .font('Helvetica-Bold')
-                            .text(`${index + 1}. ${rec.title || 'Recommendation'}`, 60, cardY + 10, {
-                                width: doc.page.width - 120
-                            });
-
-                        doc.fontSize(10)
-                            .fillColor(this.brandColors.text)
-                            .font('Helvetica')
-                            .text(rec.description || 'No description', 60, cardY + 30, {
-                                width: doc.page.width - 120
-                            });
-
-                        doc.y = cardY + 70;
-                        doc.moveDown(0.5);
-                    });
-                }
-
-                doc.moveDown(2);
-
-                // Risk Assessment Section
-                if (aiAnalysis?.risks && aiAnalysis.risks.length > 0) {
-                    // Check if we need a new page
-                    if (doc.y > doc.page.height - 150) {
-                        doc.addPage();
-                        doc.x = 50;
-                        doc.y = 50;
-                    }
-
-                    doc.fontSize(16)
-                        .fillColor(this.brandColors.primary)
-                        .font('Helvetica-Bold')
-                        .text('RISK ASSESSMENT', 50, doc.y, {
-                            underline: true,
-                            width: doc.page.width - 100
-                        });
-                    doc.moveDown(0.5);
-
-                    aiAnalysis.risks.forEach((risk, index) => {
-                        const riskColor = risk.severity === 'High' ? '#ef4444' :
-                            risk.severity === 'Medium' ? '#f59e0b' : '#10b981';
-
-                        doc.fontSize(11)
-                            .fillColor(riskColor)
-                            .font('Helvetica-Bold')
-                            .text(`• ${risk.description} [${risk.severity} Risk]`, 50, doc.y, {
-                                width: doc.page.width - 100
-                            });
-
-                        if (risk.mitigation) {
-                            doc.fontSize(10)
-                                .fillColor(this.brandColors.text)
-                                .font('Helvetica')
-                                .text(`   Mitigation: ${risk.mitigation}`, 70, doc.y, {
-                                    width: doc.page.width - 120
-                                });
-                        }
-                        doc.moveDown(0.5);
-                    });
-                }
-
-                doc.moveDown(2);
-
-                // Technical Requirements Section
-                if (aiAnalysis?.technicalRequirements) {
-                    // Check if we need a new page
-                    if (doc.y > doc.page.height - 150) {
-                        doc.addPage();
-                        doc.x = 50;
-                        doc.y = 50;
-                    }
-
-                    doc.fontSize(16)
-                        .fillColor(this.brandColors.primary)
-                        .font('Helvetica-Bold')
-                        .text('TECHNICAL REQUIREMENTS', 50, doc.y, {
-                            underline: true,
-                            width: doc.page.width - 100
-                        });
-                    doc.moveDown(0.5);
-
-                    doc.fontSize(11)
-                        .fillColor(this.brandColors.text)
-                        .font('Helvetica')
-                        .text(aiAnalysis.technicalRequirements, 50, doc.y, {
-                            align: 'justify',
-                            width: doc.page.width - 100
-                        });
-                }
-
-                // Add footer to all pages
-                const range = doc.bufferedPageRange();
-                for (let i = 0; i < range.count; i++) {
-                    doc.switchToPage(i);
-                    this.addFooter(doc, `AI Analysis for: ${projectData.title || 'Project'}`);
-                }
-
-                doc.end();
-
-                stream.on('finish', () => {
-                    console.log(`AI Structor Analysis PDF generated: ${filename}`);
-                    resolve({
-                        filename,
-                        filePath,
-                        url: `/uploads/pdfs/${filename}`,
-                        documentId: docId,
-                        type: 'ai-analysis',
-                        analysisId: aiAnalysis?.id || docId,
-                        generatedAt: new Date().toISOString()
-                    });
-                });
-
-                stream.on('error', reject);
-
-            } catch (error) {
-                console.error('Error generating AI Structor Analysis PDF:', error);
-                reject(error);
-            }
-        });
-    }
-
-    /**
- * Generate Detailed AI Structor Report with multiple pages
- */
-    generateDetailedAIReport(projectData, fullAnalysis) {
-        return new Promise(async (resolve, reject) => {
-            try {
-                const docId = uuidv4();
-                const filename = `detailed-ai-report-${Date.now()}.pdf`;
-                const filePath = path.join(this.uploadsDir, filename);
-
-                const doc = new PDFDocument({
-                    margin: 50,
-                    size: 'A4',
-                    bufferPages: true,
-                    info: {
-                        Title: 'Detailed AI Structor Report',
-                        Author: 'AI Structor Advanced Analysis',
-                        Subject: 'Comprehensive AI Project Analysis',
-                        Keywords: 'AI, Detailed, Analysis, Report, Project',
-                        Creator: 'AI Structor Pro v2.0'
-                    }
-                });
-
-                const stream = fs.createWriteStream(filePath);
-                doc.pipe(stream);
-
-                // ========== COVER PAGE ==========
-                await this.addHeader(doc, 'DETAILED AI REPORT');
-                doc.moveDown(4);
-
-                // Title
-                doc.fontSize(28)
-                    .fillColor(this.brandColors.primary)
-                    .font('Helvetica-Bold')
-                    .text('AI STRUCTOR', 50, doc.y, {
-                        align: 'center',
-                        width: doc.page.width - 100
-                    });
-
-                doc.fontSize(22)
-                    .fillColor(this.brandColors.secondary)
-                    .font('Helvetica-Bold')
-                    .text('Advanced Project Analysis', 50, doc.y, {
-                        align: 'center',
-                        width: doc.page.width - 100
-                    });
-
-                doc.moveDown(3);
-
-                // Project Info box
-                const boxWidth = 400;
-                const boxHeight = 200;
-                const boxX = (doc.page.width - boxWidth) / 2;
-                const boxY = doc.y;
-
-                doc.save();
-                doc.rect(boxX, boxY, boxWidth, boxHeight)
-                    .fillOpacity(0.2)
-                    .fill(this.brandColors.lightGray);
-
-                doc.strokeColor(this.brandColors.primary)
-                    .lineWidth(1)
-                    .rect(boxX, boxY, boxWidth, boxHeight)
-                    .stroke();
-                doc.restore();
-
-                doc.fontSize(20)
-                    .fillColor(this.brandColors.primary)
-                    .font('Helvetica-Bold')
-                    .text(projectData.title || 'Project Analysis', boxX + 20, boxY + 30, {
-                        width: boxWidth - 40,
-                        align: 'center'
-                    });
-
-                doc.fontSize(14)
-                    .fillColor(this.brandColors.text)
-                    .font('Helvetica')
-                    .text(`Generated: ${new Date().toLocaleString()}`, boxX + 20, boxY + 80, {
-                        width: boxWidth - 40,
-                        align: 'center'
-                    });
-
-                doc.fontSize(12)
-                    .fillColor(this.brandColors.secondary)
-                    .font('Helvetica-Oblique')
-                    .text('Powered by Advanced AI Analysis', boxX + 20, boxY + 120, {
-                        width: boxWidth - 40,
-                        align: 'center'
-                    });
-
-                // ========== CONTENT PAGES ==========
-                // Add a new page for actual content
-                doc.addPage();
-
-                // Add header to the new page
-                await this.addHeader(doc, 'DETAILED ANALYSIS');
-
-                // Table of Contents
-                doc.fontSize(18)
-                    .fillColor(this.brandColors.primary)
-                    .font('Helvetica-Bold')
-                    .text('TABLE OF CONTENTS', 50, doc.y, {
-                        underline: true,
-                        width: doc.page.width - 100
-                    });
-
-                doc.moveDown(1);
-
-                const sections = [
-                    '1. Executive Summary',
-                    '2. Project Analysis',
-                    '3. Technical Specifications',
-                    '4. Architecture Overview',
-                    '5. Implementation Plan',
-                    '6. Risk Assessment',
-                    '7. Resource Allocation',
-                    '8. Timeline & Milestones',
-                    '9. Success Metrics',
-                    '10. Conclusion'
-                ];
-
-                sections.forEach(section => {
-                    doc.fontSize(11)
-                        .fillColor(this.brandColors.text)
-                        .font('Helvetica')
-                        .text(section, 60, doc.y, {
-                            width: doc.page.width - 120
-                        });
-                    doc.moveDown(0.8);
-                });
-
-                // Add more content sections based on fullAnalysis
-                if (fullAnalysis) {
-                    // Check if we need a new page
-                    if (doc.y > doc.page.height - 150) {
-                        doc.addPage();
-                        doc.x = 50;
-                        doc.y = 50;
-                    }
-
-                    // Add more pages with actual analysis content
-                    if (fullAnalysis.executiveSummary) {
-                        doc.addPage();
-                        await this.addHeader(doc, 'EXECUTIVE SUMMARY');
-
-                        doc.fontSize(12)
-                            .fillColor(this.brandColors.text)
-                            .font('Helvetica')
-                            .text(fullAnalysis.executiveSummary, 50, doc.y, {
-                                align: 'justify',
-                                width: doc.page.width - 100
-                            });
-                    }
-
-                    // Add technical specifications if available
-                    if (fullAnalysis.technicalSpecs) {
-                        doc.addPage();
-                        await this.addHeader(doc, 'TECHNICAL SPECIFICATIONS');
-
-                        if (Array.isArray(fullAnalysis.technicalSpecs)) {
-                            fullAnalysis.technicalSpecs.forEach((spec, index) => {
-                                doc.fontSize(11)
-                                    .fillColor(this.brandColors.primary)
-                                    .font('Helvetica-Bold')
-                                    .text(`${index + 1}. ${spec.title || 'Specification'}`, 50, doc.y, {
-                                        width: doc.page.width - 100
-                                    });
-
-                                doc.fontSize(10)
-                                    .fillColor(this.brandColors.text)
-                                    .font('Helvetica')
-                                    .text(spec.description || 'No description', 70, doc.y, {
-                                        width: doc.page.width - 120
-                                    });
-
-                                doc.moveDown(1);
-                            });
-                        }
-                    }
-
-                    // Add implementation plan if available
-                    if (fullAnalysis.implementationPlan) {
-                        doc.addPage();
-                        await this.addHeader(doc, 'IMPLEMENTATION PLAN');
-
-                        doc.fontSize(12)
-                            .fillColor(this.brandColors.text)
-                            .font('Helvetica')
-                            .text(fullAnalysis.implementationPlan, 50, doc.y, {
-                                align: 'justify',
-                                width: doc.page.width - 100
-                            });
-                    }
-                } else {
-                    // If no fullAnalysis provided, add placeholder content
-                    doc.addPage();
-                    await this.addHeader(doc, 'ANALYSIS CONTENT');
-
-                    doc.fontSize(14)
-                        .fillColor(this.brandColors.text)
-                        .font('Helvetica')
-                        .text('Detailed analysis content would appear here...', 50, doc.y, {
-                            width: doc.page.width - 100
-                        });
-
-                    doc.moveDown(2);
-
-                    doc.fontSize(12)
-                        .fillColor(this.brandColors.secondary)
-                        .font('Helvetica-Oblique')
-                        .text('This is a template for detailed AI analysis reports.', 50, doc.y, {
-                            width: doc.page.width - 100
-                        });
-                }
-
-                // ========== FINALIZE ==========
-                // Add footer to all pages
-                const range = doc.bufferedPageRange();
-                for (let i = 0; i < range.count; i++) {
-                    doc.switchToPage(i);
-                    this.addFooter(doc, `Detailed Report - Page ${i + 1} of ${range.count}`);
-                }
-
-                doc.end();
-
-                stream.on('finish', () => {
-                    console.log(`✅ Detailed AI Report generated: ${filename} (${range.count} pages)`);
-                    resolve({
-                        filename,
-                        filePath,
-                        url: `/uploads/pdfs/${filename}`,
-                        documentId: docId,
-                        type: 'detailed-ai-report',
-                        pageCount: range.count,
-                        generatedAt: new Date().toISOString()
-                    });
-                });
-
-                stream.on('error', reject);
-
-            } catch (error) {
-                console.error('Error generating Detailed AI Report:', error);
-                reject(error);
-            }
-        });
-    }
-
-    /**
-     * Delete PDF files
-     */
-    async deletePDFs(fileUrls) {
-        try {
-            if (!Array.isArray(fileUrls)) {
-                fileUrls = [fileUrls];
-            }
-
-            const results = await Promise.allSettled(
-                fileUrls.map(url => {
-                    if (!url) return Promise.resolve(false);
-
-                    const filename = url.split('/').pop();
-                    const filePath = path.join(this.uploadsDir, filename);
-
-                    if (fs.existsSync(filePath)) {
-                        fs.unlinkSync(filePath);
-                        console.log(`Deleted AI Structor PDF: ${filename}`);
-                        return true;
-                    }
-                    return false;
-                })
             );
+    }
 
-            return {
-                deleted: results.filter(r => r.value).length,
-                failed: results.filter(r => !r.value).length,
-                total: results.length
-            };
-        } catch (error) {
-            console.error('Error deleting AI Structor PDFs:', error);
-            return { deleted: 0, failed: 1, total: 1 };
+    /**
+     * Add professional section header
+     */
+    addSectionHeader(doc, title, contentWidth, isSubSection = false) {
+        const headerY = doc.y;
+        const headerHeight = isSubSection ? 35 : 40;
+
+        // Header background gradient effect
+        doc.roundedRect(this.PAGE_MARGIN.left, headerY, contentWidth, headerHeight, 6)
+            .fillColor(isSubSection ? this.COLORS.background : this.COLORS.secondary)
+            .fill();
+
+        // Left accent
+        doc.rect(this.PAGE_MARGIN.left, headerY, 5, headerHeight)
+            .fillColor(this.COLORS.accent)
+            .fill();
+
+        // Title
+        doc.fontSize(isSubSection ? 13 : 16)
+            .font('Helvetica-Bold')
+            .fillColor(isSubSection ? this.COLORS.text : '#ffffff')
+            .text(title,
+                this.PAGE_MARGIN.left + 20,
+                headerY + (headerHeight / 2) - 7,
+                { width: contentWidth - 40 });
+
+        doc.y = headerY + headerHeight;
+    }
+
+    /**
+     * Check page break for questions section
+     */
+    checkPageBreakQuestions(doc, neededHeight = 80) {
+        const pageHeight = 841.89;
+        const remainingHeight = pageHeight - doc.y - this.PAGE_MARGIN.bottom - 30;
+
+        if (remainingHeight < neededHeight) {
+            doc.addPage();
+            doc.x = this.PAGE_MARGIN.left;
+            doc.y = this.PAGE_MARGIN.top + 20;
+            return true;
         }
+        return false;
     }
 }
 
-module.exports = new AIStructorPDFGenerator();
+module.exports = new PDFGenerator();
