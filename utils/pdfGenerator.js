@@ -11,19 +11,32 @@ class PDFGenerator {
             fs.mkdirSync(this.uploadsDir, { recursive: true });
         }
 
-        // Page layout constants
+        // Professional page layout constants
         this.PAGE_MARGIN = {
-            top: 50,
-            bottom: 50,
-            left: 50,
-            right: 50
+            top: 60,
+            bottom: 60,
+            left: 60,
+            right: 60
         };
-        this.CONTENT_PADDING = 15;
-        this.HEADER_HEIGHT = 120;
+        this.CONTENT_PADDING = 20;
+        this.HEADER_HEIGHT = 100;
+        
+        // Professional color scheme
+        this.COLORS = {
+            primary: '#1a365d',      // Deep blue
+            secondary: '#2c5282',    // Medium blue
+            accent: '#4299e1',       // Light blue
+            text: '#2d3748',         // Dark gray
+            textLight: '#4a5568',    // Medium gray
+            background: '#f7fafc',   // Very light gray
+            border: '#e2e8f0',       // Light border
+            success: '#2f855a',      // Green for answers
+            headerBg: '#1a202c'      // Almost black for header
+        };
     }
 
     /**
-     * Generate a simple story PDF (max 3 pages)
+     * Generate a professional project information PDF
      */
     generateProjectInfo(project, questions) {
         return new Promise(async (resolve, reject) => {
@@ -38,23 +51,28 @@ class PDFGenerator {
 
                 const doc = new PDFDocument({
                     size: 'A4',
-                    margin: 0 // We'll handle margins manually
+                    margin: 0,
+                    bufferPages: true // Enable page numbering
                 });
 
                 const stream = fs.createWriteStream(filePath);
                 doc.pipe(stream);
 
-                let pageCount = 1;
+                // PAGE 1: Project Information
+                await this.addProfessionalHeader(doc, 'Project Overview');
+                this.addProjectInformation(doc, project);
 
-                // Add header to first page
-                await this.addGradientHeader(doc);
+                // PAGE 2: Questions & Answers (ALWAYS starts on page 2)
+                doc.addPage();
+                await this.addProfessionalHeader(doc, 'Project Questions');
+                this.addQuestionsSection(doc, questions);
 
-                // Set up page margins
-                doc.x = this.PAGE_MARGIN.left;
-                doc.y = this.HEADER_HEIGHT + this.PAGE_MARGIN.top;
-
-                // Add project information from the parameters
-                await this.addProjectInfo(doc, project, questions);
+                // Add page numbers to all pages
+                const pageCount = doc.bufferedPageRange().count;
+                for (let i = 0; i < pageCount; i++) {
+                    doc.switchToPage(i);
+                    this.addPageNumber(doc, i + 1, pageCount);
+                }
 
                 doc.end();
 
@@ -66,7 +84,7 @@ class PDFGenerator {
                         url: `/uploads/pdfs/${filename}`,
                         documentId: `doc_${Date.now()}`,
                         pages: pageCount,
-                        message: 'Story PDF created successfully!'
+                        message: 'Professional PDF created successfully!'
                     });
                 });
 
@@ -76,7 +94,7 @@ class PDFGenerator {
                 });
 
             } catch (error) {
-                console.error('❌ Error generating story PDF:', error);
+                console.error('❌ Error generating PDF:', error);
                 reject(error);
             }
         });
@@ -113,15 +131,20 @@ class PDFGenerator {
     }
 
     /**
-     * Add gradient black header with logo on left and title on right
+     * Add professional header with logo and title
      */
-    async addGradientHeader(doc) {
-        const pageWidth = 595.28; // A4 width in points (210mm)
+    async addProfessionalHeader(doc, pageTitle) {
+        const pageWidth = 595.28;
         const headerHeight = this.HEADER_HEIGHT;
 
-        // Draw header background
+        // Modern gradient header background
         doc.rect(0, 0, pageWidth, headerHeight)
-            .fillColor('#131313')
+            .fillColor(this.COLORS.headerBg)
+            .fill();
+
+        // Subtle accent line at bottom of header
+        doc.rect(0, headerHeight - 3, pageWidth, 3)
+            .fillColor(this.COLORS.accent)
             .fill();
 
         try {
@@ -129,11 +152,10 @@ class PDFGenerator {
             const logoUrl = 'https://mayabusinessclub.com/wp-content/uploads/2025/11/logo-horizontal-maya-vct.png';
             const logoBuffer = await this.downloadImage(logoUrl);
 
-            // Logo on left (adjust size as needed)
-            const logoWidth = 120;
-            const logoHeight = 40;
+            const logoWidth = 130;
+            const logoHeight = 45;
             const logoX = this.PAGE_MARGIN.left;
-            const logoY = (headerHeight - logoHeight) / 2; // Center vertically
+            const logoY = (headerHeight - logoHeight - 3) / 2;
 
             doc.image(logoBuffer, logoX, logoY, {
                 width: logoWidth,
@@ -142,408 +164,466 @@ class PDFGenerator {
 
             console.log('✅ Logo added to PDF header');
         } catch (error) {
-            console.warn('⚠️ Could not load logo, using placeholder:', error.message);
+            console.warn('⚠️ Could not load logo:', error.message);
 
             // Placeholder if logo fails
-            const logoX = this.PAGE_MARGIN.left;
-            const logoY = headerHeight / 2 - 10;
-
             doc.fillColor('#ffffff')
-                .fontSize(12)
-                .text('Maya Business Club', logoX, logoY);
+                .font('Helvetica-Bold')
+                .fontSize(14)
+                .text('Maya Business Club', this.PAGE_MARGIN.left, headerHeight / 2 - 7);
         }
 
-        // Add "Document Information" title on RIGHT side
+        // Add page title on RIGHT side
         doc.fillColor('#ffffff')
             .font('Helvetica-Bold')
-            .fontSize(18)
-            .text('Document Information',
-                pageWidth - this.PAGE_MARGIN.right - 200, // Adjusted position
-                headerHeight / 2 - 10,
+            .fontSize(20)
+            .text(pageTitle,
+                pageWidth - this.PAGE_MARGIN.right - 220,
+                headerHeight / 2 - 13,
                 {
-                    width: 200,
+                    width: 220,
                     align: 'right'
                 });
 
-        // Add a subtle separator line below header
-        doc.moveTo(0, headerHeight)
-            .lineTo(pageWidth, headerHeight)
-            .lineWidth(1)
-            .strokeColor('#444444')
-            .stroke();
+        // Set starting position for content
+        doc.x = this.PAGE_MARGIN.left;
+        doc.y = headerHeight + 40;
     }
 
     /**
-     * Check if we need to add a new page
+     * Add page number footer
      */
-    checkPageBreak(doc, neededHeight = 50) {
-        const pageHeight = 841.89; // A4 height in points
-        const remainingHeight = pageHeight - doc.y - this.PAGE_MARGIN.bottom;
-
-        if (remainingHeight < neededHeight) {
-            doc.addPage();
-
-            // Draw header on new page
-            this.addSimpleHeader(doc);
-
-            // Reset position with margins
-            doc.x = this.PAGE_MARGIN.left;
-            doc.y = this.PAGE_MARGIN.top;
-
-            // Add spacing after page break
-            return this.CONTENT_PADDING;
-        }
-        return 0;
-    }
-
-    /**
-     * Simple header for subsequent pages
-     */
-    addSimpleHeader(doc) {
+    addPageNumber(doc, currentPage, totalPages) {
+        const pageHeight = 841.89;
         const pageWidth = 595.28;
-        const headerHeight = 40;
-
-        // Simple header background
-        doc.rect(0, 0, pageWidth, headerHeight)
-            .fillColor('#f5f5f5')
-            .fill();
-
-        // Header text
-        doc.fillColor('#333333')
-            .fontSize(10)
+        
+        doc.fontSize(9)
             .font('Helvetica')
-            .text('Maya Business Club - Document Information',
+            .fillColor(this.COLORS.textLight)
+            .text(
+                `Page ${currentPage} of ${totalPages}`,
                 this.PAGE_MARGIN.left,
-                headerHeight / 2 - 5,
-                { width: pageWidth - this.PAGE_MARGIN.left - this.PAGE_MARGIN.right }
+                pageHeight - this.PAGE_MARGIN.bottom + 20,
+                {
+                    width: pageWidth - this.PAGE_MARGIN.left - this.PAGE_MARGIN.right,
+                    align: 'center'
+                }
             );
-
-        // Separator line
-        doc.moveTo(0, headerHeight)
-            .lineTo(pageWidth, headerHeight)
-            .lineWidth(0.5)
-            .strokeColor('#cccccc')
-            .stroke();
     }
 
     /**
-     * Add project information content with proper spacing
+     * Add professional project information section (PAGE 1)
      */
-    async addProjectInfo(doc, project, questions) {
-        console.log("📝 Adding project information to PDF...");
+    addProjectInformation(doc, project) {
+        console.log("📝 Adding project information to page 1...");
 
         if (!project) {
-            doc.fontSize(14).text('No project information available.');
+            doc.fontSize(14)
+                .fillColor(this.COLORS.text)
+                .text('No project information available.');
             return;
         }
 
-        // ===== PROJECT TITLE SECTION =====
-        doc.fillColor('#000000');
-        this.checkPageBreak(doc, 100);
+        const pageWidth = 595.28;
+        const contentWidth = pageWidth - this.PAGE_MARGIN.left - this.PAGE_MARGIN.right;
 
-        doc.fontSize(24)
+        // ===== PROJECT TITLE =====
+        doc.fontSize(28)
             .font('Helvetica-Bold')
+            .fillColor(this.COLORS.primary)
             .text(project.title || 'Untitled Project', {
-                align: 'center',
-                width: 595.28 - this.PAGE_MARGIN.left - this.PAGE_MARGIN.right
+                align: 'left',
+                width: contentWidth
             });
+
+        doc.moveDown(0.3);
+
+        // Subtle underline
+        doc.moveTo(this.PAGE_MARGIN.left, doc.y)
+            .lineTo(this.PAGE_MARGIN.left + 80, doc.y)
+            .lineWidth(3)
+            .strokeColor(this.COLORS.accent)
+            .stroke();
+
+        doc.moveDown(2);
+
+        // ===== DESCRIPTION SECTION (MOVED TO TOP) =====
+        if (project.description) {
+            this.addSectionHeader(doc, 'Project Description', contentWidth);
+            doc.moveDown(0.8);
+
+            // Description in elegant box
+            const descBoxY = doc.y;
+            const descHeight = Math.min(
+                doc.heightOfString(project.description, {
+                    width: contentWidth - 40,
+                    align: 'justify'
+                }) + 30,
+                250
+            );
+
+            doc.roundedRect(this.PAGE_MARGIN.left, descBoxY, contentWidth, descHeight, 6)
+                .fillColor('#ffffff')
+                .fill()
+                .strokeColor(this.COLORS.border)
+                .lineWidth(1)
+                .stroke();
+
+            // Left accent border
+            doc.rect(this.PAGE_MARGIN.left, descBoxY, 4, descHeight)
+                .fillColor(this.COLORS.accent)
+                .fill();
+
+            doc.fontSize(11)
+                .font('Helvetica')
+                .fillColor(this.COLORS.text)
+                .text(project.description,
+                    this.PAGE_MARGIN.left + 24,
+                    descBoxY + 15,
+                    {
+                        width: contentWidth - 48,
+                        align: 'justify',
+                        lineGap: 4
+                    });
+
+            doc.y = descBoxY + descHeight + 20;
+        }
 
         doc.moveDown(1.5);
 
-        // ===== PROJECT DETAILS SECTION =====
-        this.checkPageBreak(doc, 150);
+        // ===== PROJECT DETAILS IN VERTICAL LIST =====
+        this.addSectionHeader(doc, 'Project Details', contentWidth);
+        doc.moveDown(1);
 
-        // Section header with background
-        const sectionWidth = 595.28 - this.PAGE_MARGIN.left - this.PAGE_MARGIN.right;
-
-        doc.rect(this.PAGE_MARGIN.left, doc.y, sectionWidth, 20)
-            .fillColor('#f0f0f0')
-            .fill();
-
-        doc.fontSize(14)
-            .font('Helvetica-Bold')
-            .fillColor('#333333')
-            .text('Project Details:', this.PAGE_MARGIN.left + this.CONTENT_PADDING, doc.y + 4);
-
-        doc.y += 30; // Move down after section header
-        doc.moveDown(0.5);
-
-        // Basic project info with spacing
         const projectDetails = [
             { label: 'Client', value: project.client?.name || 'Not specified' },
             { label: 'Category', value: project.category || 'Not specified' },
             { label: 'Priority', value: project.priority || 'Not specified' },
-            { label: 'Start Date', value: project.startDate ? new Date(project.startDate).toLocaleDateString() : 'Not specified' },
-            { label: 'End Date', value: project.endDate ? new Date(project.endDate).toLocaleDateString() : 'Not specified' },
+            { label: 'Start Date', value: project.startDate ? new Date(project.startDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Not specified' },
+            { label: 'End Date', value: project.endDate ? new Date(project.endDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Not specified' },
             { label: 'Budget', value: `${project.budget || 0} ${project.currency || 'MAD'}` },
         ];
 
-        // NEW: Render project details as simple label + value blocks (label bold, value below)
-        projectDetails.forEach((detail) => {
-            // Ensure there's space for the label + value, otherwise add a new page
-            this.checkPageBreak(doc, 50);
+        // Vertical list layout (like ul > li)
+        projectDetails.forEach((detail, index) => {
+            const itemY = doc.y;
+
+            // Bullet point
+            doc.circle(this.PAGE_MARGIN.left + 10, itemY + 6, 2.5)
+                .fillColor(this.COLORS.accent)
+                .fill();
 
             // Label (bold)
             doc.fontSize(11)
                 .font('Helvetica-Bold')
-                .fillColor('#444444')
-                .text(`${detail.label}:`, this.PAGE_MARGIN.left + this.CONTENT_PADDING, doc.y, {
-                    width: sectionWidth - this.CONTENT_PADDING * 2
-                });
-
-            doc.moveDown(0.15);
-
-            // Value (normal)
-            doc.fontSize(11)
+                .fillColor(this.COLORS.text)
+                .text(`${detail.label}:`, this.PAGE_MARGIN.left + 25, itemY, {
+                    continued: true
+                })
+                // Value (normal, on same line)
                 .font('Helvetica')
-                .fillColor('#000000')
-                .text(detail.value, {
-                    indent: this.CONTENT_PADDING,
-                    width: sectionWidth - this.CONTENT_PADDING * 2,
-                    align: 'left'
+                .fillColor(this.COLORS.textLight)
+                .text(` ${detail.value}`, {
+                    width: contentWidth - 35
                 });
 
-            doc.moveDown(0.8);
+            doc.moveDown(0.6);
         });
 
-        doc.moveDown(1);
-
-        // ===== DESCRIPTION SECTION =====
-        if (project.description) {
-            this.checkPageBreak(doc, 100);
-
-            // Section header
-            doc.rect(this.PAGE_MARGIN.left, doc.y, sectionWidth, 20)
-                .fillColor('#f0f0f0')
-                .fill();
-
-            doc.fontSize(14)
-                .font('Helvetica-Bold')
-                .fillColor('#333333')
-                .text('Description:', this.PAGE_MARGIN.left + this.CONTENT_PADDING, doc.y + 4);
-
-            doc.y += 30;
-            doc.moveDown(0.5);
-
-            // Description content with padding
-            doc.fontSize(12)
-                .font('Helvetica')
-                .fillColor('#000000')
-                .text(project.description, {
-                    align: 'left',
-                    width: sectionWidth,
-                    indent: this.CONTENT_PADDING
-                })
-                .moveDown(1.5);
-        }
-
-        // ===== QUESTIONS SECTION =====
-        if (questions && questions.length > 0) {
-            this.checkPageBreak(doc, 100);
-
-            // Questions section header
-            doc.rect(this.PAGE_MARGIN.left, doc.y, sectionWidth, 20)
-                .fillColor('#e8f4f8')
-                .fill();
-
-            doc.fontSize(14)
-                .font('Helvetica-Bold')
-                .fillColor('#2c5282')
-                .text('Project Questions & Answers:', this.PAGE_MARGIN.left + this.CONTENT_PADDING, doc.y + 4);
-
-            doc.y += 30;
-            doc.moveDown(0.5);
-
-            // Group questions by section
-            const questionsBySection = {};
-            questions.forEach((q, index) => {
-                const section = q.section || 'general';
-                if (!questionsBySection[section]) {
-                    questionsBySection[section] = {
-                        sectionName: q.sectionName || 'General Information',
-                        questions: []
-                    };
-                }
-                questionsBySection[section].questions.push(q);
-            });
-
-            // Add each section
-            Object.keys(questionsBySection).forEach((sectionKey, sectionIndex) => {
-                const section = questionsBySection[sectionKey];
-
-                this.checkPageBreak(doc, 80);
-
-                // Section header with different color
-                doc.rect(this.PAGE_MARGIN.left, doc.y, sectionWidth, 18)
-                    .fillColor('#f8f8f8')
-                    .fill();
-
-                doc.fontSize(13)
-                    .font('Helvetica-Bold')
-                    .fillColor('#555555')
-                    .text(`${sectionIndex + 1}. ${section.sectionName}`,
-                        this.PAGE_MARGIN.left + this.CONTENT_PADDING,
-                        doc.y + 2);
-
-                doc.y += 25;
-                doc.moveDown(0.3);
-
-                // Questions in this section
-                section.questions.forEach((question, qIndex) => {
-                    this.checkPageBreak(doc, question.type === 'brand-colors' ? 70 : 50);
-
-                    // Question with background
-                    doc.rect(this.PAGE_MARGIN.left + 5, doc.y - 2, sectionWidth - 10, 18)
-                        .fillColor('#f9f9f9')
-                        .fill();
-
-                    doc.fontSize(11)
-                        .font('Helvetica-Bold')
-                        .fillColor('#222222')
-                        .text(`Q${qIndex + 1}: ${question.question}`,
-                            this.PAGE_MARGIN.left + this.CONTENT_PADDING,
-                            doc.y);
-
-                    doc.y += 22;
-
-                    // SPECIAL HANDLING FOR BRAND COLORS
-                    if (question.type === 'brand-colors' || question.question.toLowerCase().includes('color') || question.question.toLowerCase().includes('brand')) {
-                        this.displayBrandColors(doc, question.answer, sectionWidth);
-                    } else {
-                        // Regular answer with indentation
-                        const answerText = question.answer || 'Not answered yet';
-                        const answerColor = question.answer ? '#006600' : '#999999';
-
-                        doc.rect(this.PAGE_MARGIN.left + 20, doc.y - 2, sectionWidth - 25, 16)
-                            .fillColor('#ffffff')
-                            .strokeColor('#eeeeee')
-                            .lineWidth(0.5)
-                            .fillAndStroke();
-
-                        doc.fontSize(10)
-                            .font('Helvetica')
-                            .fillColor(answerColor)
-                            .text(`A: ${answerText}`,
-                                this.PAGE_MARGIN.left + 25,
-                                doc.y);
-
-                        doc.y += 25;
-                    }
-
-                    doc.moveDown(0.3);
-                });
-
-                // Add spacing between sections
-                this.checkPageBreak(doc, 20);
-                doc.moveDown(0.5);
-            });
-        }
-
-        // ===== FOOTER =====
-        this.checkPageBreak(doc, 60);
-
-        doc.moveDown(2);
-
-        // Footer separator
-        doc.moveTo(this.PAGE_MARGIN.left, doc.y)
-            .lineTo(595.28 - this.PAGE_MARGIN.right, doc.y)
-            .lineWidth(0.5)
-            .strokeColor('#cccccc')
-            .stroke();
-
-        doc.moveDown(0.5);
-
+        // Add footer note for page 1
         doc.fontSize(9)
             .font('Helvetica-Oblique')
-            .fillColor('#666666')
-            .text(`Generated on: ${new Date().toLocaleString()}`, {
+            .fillColor(this.COLORS.textLight)
+            .text('Continue to next page for project questions and answers →',
+                this.PAGE_MARGIN.left,
+                780,
+                {
+                    width: contentWidth,
+                    align: 'right'
+                });
+    }
+
+    /**
+     * Add questions section (PAGE 2+)
+     */
+    addQuestionsSection(doc, questions) {
+        console.log("📝 Adding questions to page 2...");
+
+        const pageWidth = 595.28;
+        const contentWidth = pageWidth - this.PAGE_MARGIN.left - this.PAGE_MARGIN.right;
+
+        if (!questions || questions.length === 0) {
+            doc.fontSize(12)
+                .fillColor(this.COLORS.textLight)
+                .text('No questions have been added to this project yet.', {
+                    align: 'center',
+                    width: contentWidth
+                });
+            return;
+        }
+
+        // Group questions by section
+        const questionsBySection = {};
+        questions.forEach((q) => {
+            const section = q.section || 'general';
+            if (!questionsBySection[section]) {
+                questionsBySection[section] = {
+                    sectionName: q.sectionName || 'General Information',
+                    questions: []
+                };
+            }
+            questionsBySection[section].questions.push(q);
+        });
+
+        // Render each section
+        Object.keys(questionsBySection).forEach((sectionKey, sectionIndex) => {
+            const section = questionsBySection[sectionKey];
+
+            // Check if we need a new page
+            this.checkPageBreakQuestions(doc, 100);
+
+            // Section header
+            this.addSectionHeader(doc, section.sectionName, contentWidth, true);
+            doc.moveDown(0.8);
+
+            // Questions in this section
+            section.questions.forEach((question, qIndex) => {
+                this.checkPageBreakQuestions(doc, 80);
+
+                // Question card
+                const cardY = doc.y;
+                const questionHeight = this.calculateQuestionHeight(doc, question, contentWidth);
+                
+                // Card background
+                doc.roundedRect(this.PAGE_MARGIN.left, cardY, contentWidth, questionHeight, 5)
+                    .fillColor('#ffffff')
+                    .fill()
+                    .strokeColor(this.COLORS.border)
+                    .lineWidth(0.5)
+                    .stroke();
+
+                // Question number badge
+                doc.circle(this.PAGE_MARGIN.left + 20, cardY + 20, 14)
+                    .fillColor(this.COLORS.secondary)
+                    .fill();
+
+                doc.fontSize(11)
+                    .font('Helvetica-Bold')
+                    .fillColor('#ffffff')
+                    .text(`${qIndex + 1}`,
+                        this.PAGE_MARGIN.left + 15,
+                        cardY + 14,
+                        { width: 10, align: 'center' });
+
+                // Question text
+                doc.fontSize(11)
+                    .font('Helvetica-Bold')
+                    .fillColor(this.COLORS.text)
+                    .text(question.question,
+                        this.PAGE_MARGIN.left + 45,
+                        cardY + 14,
+                        { width: contentWidth - 60 });
+
+                const answerY = cardY + 38;
+
+                // Handle different answer types
+                if (question.type === 'brand-colors' || 
+                    (question.answer && question.answer.includes('#'))) {
+                    this.displayBrandColorsProfessional(doc, question.answer, answerY, contentWidth);
+                } else {
+                    // Regular text answer
+                    const answerText = question.answer || 'Not answered yet';
+                    const answerColor = question.answer ? this.COLORS.success : this.COLORS.textLight;
+
+                    // Answer background
+                    doc.roundedRect(
+                        this.PAGE_MARGIN.left + 45,
+                        answerY - 4,
+                        contentWidth - 60,
+                        questionHeight - 48,
+                        3
+                    )
+                        .fillColor(this.COLORS.background)
+                        .fill();
+
+                    doc.fontSize(10)
+                        .font('Helvetica')
+                        .fillColor(answerColor)
+                        .text(answerText,
+                            this.PAGE_MARGIN.left + 55,
+                            answerY + 4,
+                            {
+                                width: contentWidth - 80,
+                                lineGap: 2
+                            });
+                }
+
+                doc.y = cardY + questionHeight + 15;
+            });
+
+            doc.moveDown(1);
+        });
+
+        // Add generation timestamp
+        doc.moveDown(2);
+        doc.fontSize(9)
+            .font('Helvetica-Oblique')
+            .fillColor(this.COLORS.textLight)
+            .text(`Document generated on ${new Date().toLocaleString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            })}`, {
                 align: 'center',
-                width: sectionWidth
+                width: contentWidth
             });
     }
 
     /**
-     * Display brand colors with visual color swatches
+     * Calculate question card height dynamically
      */
-    displayBrandColors(doc, colorsString, sectionWidth) {
+    calculateQuestionHeight(doc, question, contentWidth) {
+        const questionHeight = doc.heightOfString(question.question, {
+            width: contentWidth - 60,
+            font: 'Helvetica-Bold',
+            fontSize: 11
+        });
+
+        let answerHeight = 30;
+        if (question.answer) {
+            if (question.type === 'brand-colors' || question.answer.includes('#')) {
+                answerHeight = 50; // Fixed height for color swatches
+            } else {
+                answerHeight = Math.max(30, doc.heightOfString(question.answer, {
+                    width: contentWidth - 80,
+                    font: 'Helvetica',
+                    fontSize: 10
+                }) + 16);
+            }
+        }
+
+        return Math.max(70, questionHeight + answerHeight + 30);
+    }
+
+    /**
+     * Professional brand colors display
+     */
+    displayBrandColorsProfessional(doc, colorsString, startY, contentWidth) {
         try {
-            // Parse colors from string (comma separated)
             const colors = colorsString.split(',').map(color => color.trim()).filter(color => color);
 
             if (colors.length === 0) {
                 doc.fontSize(10)
                     .font('Helvetica')
-                    .fillColor('#999999')
-                    .text(`A: No colors specified`,
-                        this.PAGE_MARGIN.left + 25,
-                        doc.y);
-                doc.y += 25;
+                    .fillColor(this.COLORS.textLight)
+                    .text('No colors specified',
+                        this.PAGE_MARGIN.left + 55,
+                        startY + 4);
                 return;
             }
 
-            // Answer label
-            doc.fontSize(10)
-                .font('Helvetica')
-                .fillColor('#006600')
-                .text(`A:`,
-                    this.PAGE_MARGIN.left + 25,
-                    doc.y);
+            // Background for colors
+            doc.roundedRect(
+                this.PAGE_MARGIN.left + 45,
+                startY - 4,
+                contentWidth - 60,
+                60,
+                3
+            )
+                .fillColor(this.COLORS.background)
+                .fill();
 
-            // Starting position for colors
-            let currentX = this.PAGE_MARGIN.left + 45;
-            const startY = doc.y;
-            const colorBoxSize = 20;
-            const colorSpacing = 10;
+            // Display colors horizontally
+            let currentX = this.PAGE_MARGIN.left + 60;
+            const swatchSize = 32;
+            const spacing = 15;
 
-            // Display each color with swatch
             colors.forEach((colorHex, index) => {
-                // Check if we need to move to next line
-                if (currentX + colorBoxSize + 100 > sectionWidth + this.PAGE_MARGIN.left) {
-                    doc.y += colorBoxSize + 15;
-                    currentX = this.PAGE_MARGIN.left + 45;
+                if (index > 0 && index % 8 === 0) {
+                    // New row if too many colors
+                    currentX = this.PAGE_MARGIN.left + 60;
+                    startY += swatchSize + 10;
                 }
 
-                // Draw color swatch
-                doc.rect(currentX, startY, colorBoxSize, colorBoxSize)
+                // Color swatch with shadow effect
+                doc.roundedRect(currentX, startY + 2, swatchSize, swatchSize, 4)
                     .fillColor(colorHex)
                     .fill()
-                    .strokeColor('#cccccc')
-                    .lineWidth(0.5)
-                    .stroke();
+                    .strokeColor('#000000')
+                    .lineWidth(1)
+                    .opacity(0.2)
+                    .stroke()
+                    .opacity(1);
 
-                // Add hex code next to swatch
-                doc.fontSize(9)
+                // Hex code below swatch
+                doc.fontSize(7)
                     .font('Helvetica')
-                    .fillColor('#000000')
-                    .text(colorHex, currentX + colorBoxSize + 5, startY + 5);
+                    .fillColor(this.COLORS.textLight)
+                    .text(colorHex,
+                        currentX - 5,
+                        startY + swatchSize + 6,
+                        { width: swatchSize + 10, align: 'center' });
 
-                currentX += colorBoxSize + 85; // Width of swatch + text + spacing
+                currentX += swatchSize + spacing;
             });
-
-            // Move cursor down for next content
-            doc.y = startY + colorBoxSize + 15;
 
         } catch (error) {
             console.error('Error displaying brand colors:', error);
-            // Fallback to regular text display
-            const answerColor = colorsString ? '#006600' : '#999999';
-            const answerText = colorsString || 'Not answered yet';
-
-            doc.rect(this.PAGE_MARGIN.left + 20, doc.y - 2, sectionWidth - 25, 16)
-                .fillColor('#ffffff')
-                .strokeColor('#eeeeee')
-                .lineWidth(0.5)
-                .fillAndStroke();
-
             doc.fontSize(10)
                 .font('Helvetica')
-                .fillColor(answerColor)
-                .text(`A: ${answerText}`,
-                    this.PAGE_MARGIN.left + 25,
-                    doc.y);
-
-            doc.y += 25;
+                .fillColor(this.COLORS.textLight)
+                .text(colorsString || 'Not answered yet',
+                    this.PAGE_MARGIN.left + 55,
+                    startY + 4);
         }
+    }
+
+    /**
+     * Add professional section header
+     */
+    addSectionHeader(doc, title, contentWidth, isSubSection = false) {
+        const headerY = doc.y;
+        const headerHeight = isSubSection ? 35 : 40;
+
+        // Header background gradient effect
+        doc.roundedRect(this.PAGE_MARGIN.left, headerY, contentWidth, headerHeight, 6)
+            .fillColor(isSubSection ? this.COLORS.background : this.COLORS.secondary)
+            .fill();
+
+        // Left accent
+        doc.rect(this.PAGE_MARGIN.left, headerY, 5, headerHeight)
+            .fillColor(this.COLORS.accent)
+            .fill();
+
+        // Title
+        doc.fontSize(isSubSection ? 13 : 16)
+            .font('Helvetica-Bold')
+            .fillColor(isSubSection ? this.COLORS.text : '#ffffff')
+            .text(title,
+                this.PAGE_MARGIN.left + 20,
+                headerY + (headerHeight / 2) - 7,
+                { width: contentWidth - 40 });
+
+        doc.y = headerY + headerHeight;
+    }
+
+    /**
+     * Check page break for questions section
+     */
+    checkPageBreakQuestions(doc, neededHeight = 80) {
+        const pageHeight = 841.89;
+        const remainingHeight = pageHeight - doc.y - this.PAGE_MARGIN.bottom - 30;
+
+        if (remainingHeight < neededHeight) {
+            doc.addPage();
+            doc.x = this.PAGE_MARGIN.left;
+            doc.y = this.PAGE_MARGIN.top + 20;
+            return true;
+        }
+        return false;
     }
 }
 
