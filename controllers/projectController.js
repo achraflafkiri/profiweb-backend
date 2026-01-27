@@ -490,6 +490,58 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
     return next(new AppError('Questions array is required', 400));
   }
 
+  // ===== NEW: Delete existing PDFs if they exist =====
+  let deletedPDFs = [];
+  if (project.documents && project.documents.length > 0) {
+    const fs = require('fs');
+    const path = require('path');
+
+    // Filter documents that are PDFs and delete them from filesystem
+    const pdfDocuments = project.documents.filter(doc => 
+      doc.filename && doc.filename.endsWith('.pdf')
+    );
+
+    for (const doc of pdfDocuments) {
+      try {
+        const filePath = path.join(__dirname, '..', 'uploads', 'pdfs', doc.filename);
+        
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+          console.log(`🗑️ Deleted old PDF: ${doc.filename}`);
+          deletedPDFs.push({
+            filename: doc.filename,
+            type: doc.type,
+            deleted: true
+          });
+        } else {
+          console.log(`⚠️ PDF file not found: ${doc.filename}`);
+          deletedPDFs.push({
+            filename: doc.filename,
+            type: doc.type,
+            deleted: false,
+            reason: 'File not found'
+          });
+        }
+      } catch (error) {
+        console.error(`❌ Error deleting PDF ${doc.filename}:`, error.message);
+        deletedPDFs.push({
+          filename: doc.filename,
+          type: doc.type,
+          deleted: false,
+          error: error.message
+        });
+      }
+    }
+
+    // Clear documents array from project if we're going to generate new ones
+    if (generatePDFs) {
+      await Project.findByIdAndUpdate(projectId, {
+        $set: { documents: [] }
+      });
+      console.log(`📋 Cleared documents array for project ${projectId}`);
+    }
+  }
+
   // Process each question
   const savedQuestions = [];
 
@@ -523,14 +575,11 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
     if (options && Array.isArray(options)) {
       processedOptions = options.map(option => {
         if (typeof option === 'string') {
-          // If option is a string, convert to { value: string, label: string }
           return { value: option, label: option };
         } else if (option && typeof option === 'object') {
-          // If option is an object, extract value and label
           let value = option.value;
           let label = option.label || option.value;
 
-          // Handle nested value object (the issue in the error)
           if (value && typeof value === 'object' && value.value !== undefined) {
             value = value.value;
           }
@@ -538,7 +587,6 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
             label = label.label;
           }
 
-          // Convert to string if needed
           if (value !== null && value !== undefined) {
             value = String(value);
           }
@@ -604,7 +652,7 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
     }
   );
 
-  // ===== NEW: Generate PDFs if requested =====
+  // ===== Generate PDFs if requested =====
   let pdfResults = null;
   if (generatePDFs && savedQuestions.length > 0) {
     try {
@@ -617,10 +665,8 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
         // 1. Generate Maya Business Club Project Information PDF
         PDFGenerator.generateProjectInfo(project, savedQuestions),
         
-        // 2. Generate AI Structor Analysis PDF (if you have AI analysis data)
-        // First, you might need to generate or get AI analysis data
+        // 2. Generate AI Structor Analysis PDF
         (async () => {
-          // For now, let's assume you have or generate AI analysis data
           const aiAnalysisData = {
             executiveSummary: "AI analysis of project requirements and structure.",
             confidence: 85,
@@ -655,7 +701,7 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
       // Handle Project Info PDF result
       if (projectInfoPDF.status === 'fulfilled' && projectInfoPDF.value) {
         documents.push({
-          type: 'project-info',
+          type: 'doc-infos',
           filename: projectInfoPDF.value.filename,
           url: projectInfoPDF.value.url,
           generatedAt: new Date(),
@@ -669,7 +715,7 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
       // Handle AI Analysis PDF result
       if (aiAnalysisPDF.status === 'fulfilled' && aiAnalysisPDF.value) {
         documents.push({
-          type: 'ai-analysis',
+          type: 'ai-structured',
           filename: aiAnalysisPDF.value.filename,
           url: aiAnalysisPDF.value.url,
           generatedAt: new Date(),
@@ -718,6 +764,14 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
       count: savedQuestions.length,
       customFieldsCount: savedQuestions.filter(q => q.isCustom).length,
       standardFieldsCount: savedQuestions.filter(q => !q.isCustom).length,
+      ...(deletedPDFs.length > 0 && {
+        deletedPDFs: {
+          total: deletedPDFs.length,
+          successful: deletedPDFs.filter(d => d.deleted).length,
+          failed: deletedPDFs.filter(d => !d.deleted).length,
+          details: deletedPDFs
+        }
+      }),
       ...(pdfResults && {
         pdfs: pdfResults.success ? {
           generated: pdfResults.generatedCount,

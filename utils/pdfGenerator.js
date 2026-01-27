@@ -277,7 +277,6 @@ class PDFGenerator {
             { label: 'Start Date', value: project.startDate ? new Date(project.startDate).toLocaleDateString() : 'Not specified' },
             { label: 'End Date', value: project.endDate ? new Date(project.endDate).toLocaleDateString() : 'Not specified' },
             { label: 'Budget', value: `${project.budget || 0} ${project.currency || 'MAD'}` },
-            { label: 'Progress', value: `${project.progress || 0}%` }
         ];
 
         // NEW: Render project details as simple label + value blocks (label bold, value below)
@@ -458,7 +457,7 @@ class PDFGenerator {
         doc.fontSize(9)
             .font('Helvetica-Oblique')
             .fillColor('#666666')
-            .text(`Generated on: ${new Date().toLocaleString()} • Page 1 of 1`, {
+            .text(`Generated on: ${new Date().toLocaleString()}`, {
                 align: 'center',
                 width: sectionWidth
             });
