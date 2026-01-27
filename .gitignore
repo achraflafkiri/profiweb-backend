@@ -29,9 +29,6 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# Local environment files
-.env*.local
-
 # TypeScript
 *.tsbuildinfo
 
@@ -42,5 +39,3 @@ app-example
 /android
 /ios
 .vercel
-
-/uploads
