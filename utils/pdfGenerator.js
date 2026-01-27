@@ -271,7 +271,6 @@ class PDFGenerator {
         // Basic project info with spacing
         const projectDetails = [
             { label: 'Client', value: project.client?.name || 'Not specified' },
-            { label: 'Status', value: project.status || 'Not specified' },
             { label: 'Category', value: project.category || 'Not specified' },
             { label: 'Priority', value: project.priority || 'Not specified' },
             { label: 'Start Date', value: project.startDate ? new Date(project.startDate).toLocaleDateString() : 'Not specified' },
