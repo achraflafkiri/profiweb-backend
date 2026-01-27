@@ -4,7 +4,7 @@ const path = require('path');
 const https = require('https');
 const http = require('http');
 
-class PDFGenerator {
+class AiStructorPdfGenerator {
     constructor() {
         this.uploadsDir = path.join(__dirname, '../uploads/pdfs');
         if (!fs.existsSync(this.uploadsDir)) {
@@ -60,7 +60,7 @@ class PDFGenerator {
 
                 // ===== PAGE 1: AI INSTRUCTIONS =====
                 console.log("📝 Adding AI instructions to page 1...");
-                await this.addProfessionalHeader(doc, 'AI INSTRUCTIONS FOR WEBSITE CONTENT (BINDING)');
+                await this.addProfessionalHeader(doc, 'AI INSTRUCTIONS');
                 this.addAiInstructionsContent(doc);
 
                 // ===== PAGE 2: PROJECT INFORMATION =====
@@ -119,7 +119,7 @@ class PDFGenerator {
         doc.fontSize(20)
             .font('Helvetica-Bold')
             .fillColor(this.COLORS.primary)
-            .text('AI INSTRUCTIONS FOR WEBSITE CONTENT (BINDING)', {
+            .text('AI INSTRUCTIONS', {
                 align: 'center',
                 width: contentWidth
             });
@@ -771,4 +771,4 @@ class PDFGenerator {
     }
 }
 
-module.exports = new PDFGenerator();
+module.exports = new AiStructorPdfGenerator();

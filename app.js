@@ -10,6 +10,7 @@ const projectsRouter = require("./routes/project.routes");
 const clientsRouter = require("./routes/client.routes");
 const templatesRouter = require("./routes/template.routes");
 const pdfRouter = require("./routes/pdf.routes");
+const folderRouter = require("./routes/folder.routes");
 
 const handleErrors = require("./middlewares/handleErrors");
 const cors = require("cors");
@@ -56,6 +57,7 @@ app.use("/api/v1/projects", projectsRouter);
 app.use("/api/v1/clients", clientsRouter);
 app.use("/api/v1/templates", templatesRouter);
 app.use("/api/v1/pdfs", pdfRouter);
+app.use("/api/v1/folder", folderRouter);
 
 // Error handling
 app.use(handleErrors); 
