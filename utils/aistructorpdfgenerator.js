@@ -41,12 +41,12 @@ class AiStructorPdfGenerator {
     generateAiInstructions(project, questions) {
         return new Promise(async (resolve, reject) => {
             try {
-                console.log("📄 PDF Generator called with:");
-                console.log("   Project ID:", project?._id);
-                console.log("   Project Title:", project?.title);
-                console.log("   Questions count:", questions?.length || 0);
+                // console.log("📄 PDF Generator called with:");
+                // console.log("   Project ID:", project?._id);
+                // console.log("   Project Title:", project?.title);
+                // console.log("   Questions count:", questions?.length || 0);
 
-                const filename = `ai-${Date.now()}.pdf`;
+                const filename = `ai-structured-${Date.now()}.pdf`;
                 const filePath = path.join(this.uploadsDir, filename);
 
                 const doc = new PDFDocument({
@@ -59,18 +59,18 @@ class AiStructorPdfGenerator {
                 doc.pipe(stream);
 
                 // ===== PAGE 1: AI INSTRUCTIONS =====
-                console.log("📝 Adding AI instructions to page 1...");
+                // console.log("📝 Adding AI instructions to page 1...");
                 await this.addProfessionalHeader(doc, 'AI INSTRUCTIONS');
                 this.addAiInstructionsContent(doc);
 
                 // ===== PAGE 2: PROJECT INFORMATION =====
-                console.log("📝 Adding project information to page 2...");
+                // console.log("📝 Adding project information to page 2...");
                 doc.addPage();
                 await this.addProfessionalHeader(doc, 'PROJECT INFORMATION');
                 this.addProjectInformation(doc, project);
 
                 // ===== PAGE 3: QUESTIONS & ANSWERS =====
-                console.log("📝 Adding questions to page 3...");
+                // console.log("📝 Adding questions to page 3...");
                 doc.addPage();
                 await this.addProfessionalHeader(doc, 'PROJECT QUESTIONS');
                 this.addQuestionsSection(doc, questions);
@@ -85,7 +85,7 @@ class AiStructorPdfGenerator {
                 doc.end();
 
                 stream.on('finish', () => {
-                    console.log("✅ PDF created successfully:", filename);
+                    // console.log("✅ PDF created successfully:", filename);
                     resolve({
                         filename,
                         filePath,
@@ -621,7 +621,7 @@ class AiStructorPdfGenerator {
         return new Promise((resolve, reject) => {
             const protocol = url.startsWith('https') ? https : http;
 
-            console.log(`⬇️ Downloading logo from: ${url}`);
+            // // console.log(`⬇️ Downloading logo from: ${url}`);
 
             protocol.get(url, (response) => {
                 if (response.statusCode !== 200) {
@@ -634,7 +634,7 @@ class AiStructorPdfGenerator {
                 response.on('data', (chunk) => chunks.push(chunk));
                 response.on('end', () => {
                     const buffer = Buffer.concat(chunks);
-                    console.log(`✅ Logo downloaded successfully (${buffer.length} bytes)`);
+                    // console.log(`✅ Logo downloaded successfully (${buffer.length} bytes)`);
                     resolve(buffer);
                 });
             }).on('error', (error) => {
@@ -676,7 +676,7 @@ class AiStructorPdfGenerator {
                 height: logoHeight
             });
 
-            console.log('✅ Logo added to PDF header');
+            // console.log('✅ Logo added to PDF header');
         } catch (error) {
             console.warn('⚠️ Could not load logo:', error.message);
 

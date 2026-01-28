@@ -3,6 +3,8 @@ const File = require('../models/file.model');
 const Folder = require('../models/folder.model');
 const path = require('path');
 const fs = require('fs');
+const catchAsync = require('../utils/catchAsync');
+const AppError = require('../utils/AppError');
 
 // Upload file to folder
 const uploadFile = async (req, res) => {
@@ -202,10 +204,40 @@ const getUserFiles = async (req, res) => {
     }
 };
 
+const getFilesByFolderId = catchAsync(async (req, res, next) => {
+  const { folderId } = req.params;
+  
+  // Check if folder exists
+  const folder = await Folder.findById(folderId);
+  
+  if (!folder) {
+    return next(new AppError('Folder not found', 404));
+  }
+
+  // Get all files in this folder
+  const files = await File.find({ folder: folderId })
+    .sort({ createdAt: -1 })
+    .lean();  // Returns plain JavaScript objects instead of mongoose documents
+
+  // Return the data
+  res.status(200).json({
+    status: 'success',
+    data: {
+      folder: {
+        id: folder._id,
+        name: folder.name
+      },
+      files: files,
+      count: files.length
+    }
+  });
+});
+
 module.exports = {
     uploadFile,
     getFile,
     downloadFile,
     deleteFile,
-    getUserFiles
+    getUserFiles,
+    getFilesByFolderId
 };

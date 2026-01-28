@@ -424,3 +424,63 @@ exports.activateUserById = catchAsync(async (req, res, next) => {
     }
   });
 });
+
+// Delete user permanently (superadmin only)
+exports.deleteUserPermanently = catchAsync(async (req, res, next) => {
+  const { userId } = req.params;
+
+  // Validate ObjectId
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    return next(new AppError('Invalid user ID format', 400));
+  }
+
+  // Find user
+  const user = await User.findById(userId);
+
+  // Check if user exists
+  if (!user) {
+    return next(new AppError('User not found', 404));
+  }
+
+  // Only superadmin can permanently delete users
+  if (req.user.role !== 'superadmin') {
+    return next(new AppError('Only superadmin can permanently delete users', 403));
+  }
+
+  // Prevent deleting superadmin accounts
+  if (user.role === 'superadmin') {
+    return next(new AppError('Cannot delete superadmin account', 403));
+  }
+
+  // Prevent self-deletion
+  if (userId === req.user.id.toString()) {
+    return next(new AppError('You cannot delete your own account', 400));
+  }
+
+  // Optional: Check if user has any important data before deletion
+  // You might want to check if user has created projects, files, etc.
+  // For example:
+  // const userProjects = await Project.countDocuments({ createdBy: userId });
+  // if (userProjects > 0) {
+  //   return next(new AppError('User has created projects. Cannot delete permanently.', 400));
+  // }
+
+  // Delete user permanently from database
+  await User.findByIdAndDelete(userId);
+
+  // Log the deletion (you might want to save this in an audit log)
+  console.log(`User ${user.email} (${user._id}) permanently deleted by superadmin ${req.user.email}`);
+
+  res.status(200).json({
+    success: true,
+    message: 'User permanently deleted successfully',
+    data: {
+      id: user._id,
+      email: user.email,
+      username: user.username,
+      fullName: `${user.firstName} ${user.lastName}`,
+      role: user.role,
+      deletedAt: new Date()
+    }
+  });
+});

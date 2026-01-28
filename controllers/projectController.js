@@ -107,7 +107,10 @@ const getProjectById = catchAsync(async (req, res, next) => {
     .populate({
       path: 'client.id',
       select: 'name email company phone address contactPerson'
-    });
+    })
+    .populate({
+      path: 'documents'
+    })
 
   // Check if project exists
   if (!project) {
@@ -473,6 +476,165 @@ const getQuestionsByProject = catchAsync(async (req, res, next) => {
   });
 });
 
+const deleteProject = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
+
+  const project = await Project.findOneAndUpdate(
+    { _id: id }, // Wrap id in a query object
+    { isDeleted: true },
+    { new: true }
+  );
+
+  if (!project) {
+    return next(new AppError('Project not found', 404));
+  }
+
+  // Optional: Check if project was already deleted
+  if (project.isDeleted) {
+    return res.status(200).json({
+      status: 'success',
+      message: 'Project was already deleted',
+      data: {
+        project
+      }
+    });
+  }
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      project
+    }
+  });
+});
+
+const updateProject = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
+  const {
+    title,
+    description,
+    clientId,
+    category,
+    startDate,
+    endDate,
+    budget,
+    cost,
+    priority,
+    tags,
+    note,
+    status,
+    progress,
+    subcategory,
+    actualStartDate,
+    actualEndDate,
+    currency,
+    isPublic
+  } = req.body;
+
+  // console.log("note ===> ", req.body);
+
+  // Find project
+  const project = await Project.findById(id);
+  if (!project) {
+    return next(new AppError('Project not found', 404));
+  }
+
+  // Check if client exists if clientId is being updated
+  if (clientId && clientId !== project.client.id.toString()) {
+    const client = await Client.findById(clientId);
+    if (!client) {
+      return next(new AppError('Client not found', 404));
+    }
+
+    // Remove project from old client's projects list
+    await Client.findByIdAndUpdate(project.client.id, {
+      $pull: { projects: project._id }
+    });
+
+    // Add project to new client's projects list
+    await Client.findByIdAndUpdate(clientId, {
+      $push: { projects: project._id }
+    });
+
+    // Update project's client info
+    project.client = {
+      name: client.name,
+      id: client._id,
+      contactPerson: client.contactPerson
+    };
+  }
+
+  // Handle date validation and updates
+  let start, end;
+
+  if (startDate || endDate) {
+    start = startDate ? new Date(startDate) : new Date(project.startDate);
+    end = endDate ? new Date(endDate) : new Date(project.endDate);
+
+    // Set start date to beginning of day
+    start.setHours(0, 0, 0, 0);
+
+    // Set end date to end of day
+    end.setHours(23, 59, 59, 999);
+
+    // Validate dates
+    if (start >= end) {
+      return next(new AppError('End date must be after start date', 400));
+    }
+
+    // Update project dates
+    if (startDate) project.startDate = start;
+    if (endDate) project.endDate = end;
+  }
+
+  // Update other fields
+  if (title) project.title = title;
+  if (description) project.description = description;
+  if (category) project.category = category;
+  if (subcategory !== undefined) project.subcategory = subcategory;
+  if (budget !== undefined) project.budget = budget;
+  if (currency) project.currency = currency;
+  if (priority) project.priority = priority;
+  if (tags !== undefined) project.tags = tags;
+  if (note !== undefined) project.note = note;
+  if (status) project.status = status;
+  if (progress !== undefined) project.progress = progress;
+  if (actualStartDate) project.actualStartDate = actualStartDate;
+  if (actualEndDate) project.actualEndDate = actualEndDate;
+  if (isPublic !== undefined) project.isPublic = isPublic;
+
+  // Update cost if provided
+  if (cost) {
+    project.cost = {
+      ...project.cost,
+      ...cost
+    };
+  }
+
+  // Set updatedBy
+  project.updatedBy = req.user.id;
+
+  // Save the project
+  await project.save();
+
+  // Get populated project for response
+  const populatedProject = await Project.findById(project._id)
+    .populate('projectManager', 'name email')
+    .populate('client.id', 'name email company')
+    .populate('createdBy', 'name email')
+    .populate('updatedBy', 'name email');
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Project updated successfully',
+    data: {
+      project: populatedProject
+    }
+  });
+});
+
+
+
 const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
   const { id: projectId } = req.params;
   const { questions, projectType, generatePDFs = true } = req.body;
@@ -488,58 +650,6 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
   // Validate that questions array exists
   if (!questions || !Array.isArray(questions)) {
     return next(new AppError('Questions array is required', 400));
-  }
-
-  // ===== NEW: Delete existing PDFs if they exist =====
-  let deletedPDFs = [];
-  if (project.documents && project.documents.length > 0) {
-    const fs = require('fs');
-    const path = require('path');
-
-    // Filter documents that are PDFs and delete them from filesystem
-    const pdfDocuments = project.documents.filter(doc =>
-      doc.filename && doc.filename.endsWith('.pdf')
-    );
-
-    for (const doc of pdfDocuments) {
-      try {
-        const filePath = path.join(__dirname, '..', 'uploads', 'pdfs', doc.filename);
-
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-          console.log(`🗑️ Deleted old PDF: ${doc.filename}`);
-          deletedPDFs.push({
-            filename: doc.filename,
-            type: doc.type,
-            deleted: true
-          });
-        } else {
-          console.log(`⚠️ PDF file not found: ${doc.filename}`);
-          deletedPDFs.push({
-            filename: doc.filename,
-            type: doc.type,
-            deleted: false,
-            reason: 'File not found'
-          });
-        }
-      } catch (error) {
-        console.error(`❌ Error deleting PDF ${doc.filename}:`, error.message);
-        deletedPDFs.push({
-          filename: doc.filename,
-          type: doc.type,
-          deleted: false,
-          error: error.message
-        });
-      }
-    }
-
-    // Clear documents array from project if we're going to generate new ones
-    if (generatePDFs) {
-      await Project.findByIdAndUpdate(projectId, {
-        $set: { documents: [] }
-      });
-      console.log(`📋 Cleared documents array for project ${projectId}`);
-    }
   }
 
   // Process each question
@@ -633,7 +743,7 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
     savedQuestions.push(savedQuestion);
   }
 
-  // Optionally update project's questionsStatus
+  // Update project's questionsStatus
   const allAnswered = savedQuestions.every(q => q.status === 'answered');
   const anyAnswered = savedQuestions.some(q => q.status === 'answered');
 
@@ -652,140 +762,90 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
     }
   );
 
-  // ===== Generate PDFs if requested =====
-  let pdfResults = null;
+  // ===== SIMPLE PDF GENERATION =====
+  let pdfResult = null;
+  let createdFile = null;
+
+  console.log("kayn ---------");
+
   if (generatePDFs && savedQuestions.length > 0) {
+    console.log("kayn --------- ohna ??????????????");
     try {
-      // Import both PDF generators
-      const PDFGenerator = require('../utils/pdfGenerator'); // Maya Business Club
-      const AIStructorPDFGenerator = require('../utils/aistructorpdfgenerator'); // AI Structor
+      const AIStructorPDFGenerator = require('../utils/aistructorpdfgenerator');
+      const File = require("../models/file.model");
 
-      // Generate both PDFs in parallel for better performance
-      const [projectInfoPDF, aiAnalysisPDF] = await Promise.allSettled([
-        // 1. Generate Maya Business Club Project Information PDF
-        PDFGenerator.generateProjectInfo(project, savedQuestions),
-        // 2. Generate AI Structor PDF
-        AIStructorPDFGenerator.generateAiInstructions(project, savedQuestions)
-      ]);
+      // Generate AI Structor PDF
+      const aiPdf = await AIStructorPDFGenerator.generateAiInstructions(project, savedQuestions);
 
-      // ===== NEW: Create Folder and File Records =====
-      const Folder = require('../models/folder.model');
-      const File = require('../models/file.model');
+      // Get all existing file IDs from the project to delete them
+      const existingFileIds = project.documents || [];
+      console.log(`📄 Existing file IDs to remove: ${existingFileIds.length}`);
 
-      const folderName = `Project_${project.title}_PDFs`;
-      const userId = req.user.id;
+      // Delete ALL existing files from File collection
+      if (existingFileIds.length > 0) {
+        await File.deleteMany({ 
+          _id: { $in: existingFileIds } 
+        });
+        console.log(`🗑️ COMPLETELY REMOVED ${existingFileIds.length} existing files`);
+      }
 
-      // Find or create folder
-      let folder = await Folder.findOne({
-        name: folderName,
-        user: userId
+      // Create NEW file document in database
+      createdFile = await File.create({
+        filename: aiPdf.filename,
+        originalFilename: aiPdf.filename,
+        path: aiPdf.path || `uploads/pdfs/${aiPdf.filename}`,
+        size: aiPdf.size || 0,
+        project: projectId,
+        user: req.user.id,
       });
 
-      if (!folder) {
-        folder = await Folder.create({
-          name: folderName,
-          user: userId
-        });
-        console.log(`📁 Created new folder: ${folderName}`);
-      } else {
-        console.log(`📁 Using existing folder: ${folderName}`);
-      }
+      console.log(`✅ NEW PDF file document created with ID: ${createdFile._id}`);
 
-      // Process results
-      const documents = [];
-      const fileRecords = [];
-
-      // Handle Project Info PDF result
-      if (projectInfoPDF.status === 'fulfilled' && projectInfoPDF.value) {
-        const pdfData = projectInfoPDF.value;
-        
-        documents.push({
-          type: 'doc-infos',
-          filename: pdfData.filename,
-          url: pdfData.url,
-          generatedAt: new Date(),
-          documentId: pdfData.documentId
-        });
-
-        // Create File record in database
-        const fileRecord = await File.create({
-          filename: pdfData.filename,
-          path: pdfData.url || `/uploads/pdfs/${pdfData.filename}`,
-          user: userId,
-          folder: folder._id
-        });
-        fileRecords.push(fileRecord);
-
-        console.log('✅ Project Info PDF generated:', pdfData.filename);
-      } else {
-        console.error('❌ Failed to generate Project Info PDF:', projectInfoPDF.reason);
-      }
-
-      // Handle AI Analysis PDF result
-      if (aiAnalysisPDF.status === 'fulfilled' && aiAnalysisPDF.value) {
-        const pdfData = aiAnalysisPDF.value;
-        
-        documents.push({
-          type: 'ai-structured',
-          filename: pdfData.filename,
-          url: pdfData.url,
-          generatedAt: new Date(),
-          documentId: pdfData.documentId
-        });
-
-        // Create File record in database
-        const fileRecord = await File.create({
-          filename: pdfData.filename,
-          path: pdfData.url || `/uploads/pdfs/${pdfData.filename}`,
-          user: userId,
-          folder: folder._id
-        });
-        fileRecords.push(fileRecord);
-
-        console.log('✅ AI Analysis PDF generated:', pdfData.filename);
-      } else {
-        console.error('❌ Failed to generate AI Analysis PDF:', aiAnalysisPDF.reason);
-      }
-
-      // Save PDF info to project
-      if (documents.length > 0) {
-        await Project.findByIdAndUpdate(projectId, {
-          $push: {
-            documents: {
-              $each: documents
-            }
-          },
-          lastPDFGeneration: new Date()
-        });
-      }
-
-      pdfResults = {
-        success: true,
-        documents: documents,
-        generatedCount: documents.length,
-        folder: {
-          id: folder._id,
-          name: folder.name
+      // COMPLETELY REPLACE the documents array with ONLY the new file ID
+      await Project.findByIdAndUpdate(
+        projectId,
+        {
+          $set: {
+            documents: [createdFile._id]  // ONLY the new file, remove ALL others
+          }
         },
-        files: fileRecords.map(file => ({
-          id: file._id,
-          filename: file.filename,
-          path: file.path
-        }))
+        { new: true }
+      );
+
+      console.log(`✅ Project documents array COMPLETELY REPLACED with new file ID: ${createdFile._id}`);
+      console.log(`✅ Project now has EXACTLY 1 document in its array`);
+
+      // Simple document object for response
+      const document = {
+        filename: aiPdf.filename,
+        url: aiPdf.url || `/uploads/pdfs/${aiPdf.filename}`,
+        type: 'ai-structured',
+        generatedAt: new Date(),
+        documentId: aiPdf.documentId || `doc_${Date.now()}`,
+        fileId: createdFile._id
+      };
+
+      console.log(`✅ PDF generated: ${aiPdf.filename}`);
+
+      pdfResult = {
+        success: true,
+        document: document,
+        file: createdFile,
+        removedFiles: existingFileIds.length,
+        message: 'PDF generated, ALL old files removed, and only new file added'
       };
 
     } catch (pdfError) {
-      console.error('❌ Error in PDF generation process:', pdfError);
-      // Don't fail the entire request if PDF generation fails
-      pdfResults = {
+      console.error('❌ Error generating PDF or creating file:', pdfError);
+      pdfResult = {
         success: false,
-        error: pdfError.message,
-        generatedCount: 0
+        error: pdfError.message
       };
     }
   }
 
-  res.status(200).json({
+  // Prepare response
+  const response = {
     status: 'success',
     message: 'Project questions updated successfully',
     data: {
@@ -794,64 +854,40 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
       count: savedQuestions.length,
       customFieldsCount: savedQuestions.filter(q => q.isCustom).length,
       standardFieldsCount: savedQuestions.filter(q => !q.isCustom).length,
-      ...(deletedPDFs.length > 0 && {
-        deletedPDFs: {
-          total: deletedPDFs.length,
-          successful: deletedPDFs.filter(d => d.deleted).length,
-          failed: deletedPDFs.filter(d => !d.deleted).length,
-          details: deletedPDFs
-        }
-      }),
-      ...(pdfResults && {
-        pdfs: pdfResults.success ? {
-          generated: pdfResults.generatedCount,
-          documents: pdfResults.documents,
-          folder: pdfResults.folder,
-          files: pdfResults.files
-        } : { error: pdfResults.error },
-        pdfGenerationSuccess: pdfResults.success
-      }),
       projectInfo: {
         id: project._id,
         title: project.title,
         clientName: project.client?.name,
-        questionsCompletedAt: allAnswered ? new Date() : null
+        questionsCompletedAt: allAnswered ? new Date() : null,
+        pdfsGenerated: pdfResult ? pdfResult.success : false,
+        documentsCount: pdfResult && pdfResult.success ? 1 : (project.documents?.length || 0)
       }
     }
-  });
-});
+  };
 
-const deleteProject = catchAsync(async (req, res, next) => {
-  const { id } = req.params;
-
-  const project = await Project.findOneAndUpdate(
-    { _id: id }, // Wrap id in a query object
-    { isDeleted: true },
-    { new: true }
-  );
-
-  if (!project) {
-    return next(new AppError('Project not found', 404));
+  // Add PDF info if generated
+  if (pdfResult) {
+    response.data.pdf = pdfResult.success ? {
+      success: true,
+      document: pdfResult.document,
+      file: {
+        id: createdFile?._id,
+        filename: createdFile?.filename,
+        url: createdFile?.url
+      },
+      removedFiles: pdfResult.removedFiles,
+      message: pdfResult.message,
+      warning: `Removed ${pdfResult.removedFiles} old files, project now has exactly 1 document`
+    } : {
+      success: false,
+      error: pdfResult.error
+    };
   }
 
-  // Optional: Check if project was already deleted
-  if (project.isDeleted) {
-    return res.status(200).json({
-      status: 'success',
-      message: 'Project was already deleted',
-      data: {
-        project
-      }
-    });
-  }
-
-  res.status(200).json({
-    status: 'success',
-    data: {
-      project
-    }
-  });
+  res.status(200).json(response);
 });
+
+
 
 module.exports = {
   createProject,
@@ -862,5 +898,6 @@ module.exports = {
   restoreProject,
   getQuestionsByProject,
   createOrUpdateQuestions,
-  deleteProject
+  deleteProject,
+  updateProject
 };

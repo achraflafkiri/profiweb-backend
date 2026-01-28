@@ -48,23 +48,23 @@ const projectSchema = new mongoose.Schema({
   // Project Details
   category: {
     type: String,
-    required: true,
-    enum: [
-      'Web Development',
-      'Mobile App Development',
-      'E-commerce Development',
-      'UI/UX Design',
-      'Digital Marketing',
-      'SEO Services',
-      'Social Media Marketing',
-      'Branding',
-      'Content Creation',
-      'Video Production',
-      'Custom Software',
-      'Cyber Security',
-      'IT Consulting',
-      'Other'
-    ]
+    // required: true,
+    // enum: [
+    //   'Web Development',
+    //   'Mobile App Development',
+    //   'E-commerce Development',
+    //   'UI/UX Design',
+    //   'Digital Marketing',
+    //   'SEO Services',
+    //   'Social Media Marketing',
+    //   'Branding',
+    //   'Content Creation',
+    //   'Video Production',
+    //   'Custom Software',
+    //   'Cyber Security',
+    //   'IT Consulting',
+    //   'Other'
+    // ]
   },
 
   subcategory: String,
@@ -194,31 +194,8 @@ const projectSchema = new mongoose.Schema({
   },
 
   documents: [{
-    type: {
-      type: String,
-      enum: ['doc-infos', 'ai-structured', 'other'],
-      required: true
-    },
-    filename: {
-      type: String,
-      required: true
-    },
-    url: {
-      type: String,
-      required: true
-    },
-    generatedAt: {
-      type: Date,
-      default: Date.now
-    },
-    size: {
-      type: Number,
-      default: 0
-    },
-    pages: {
-      type: Number,
-      default: 1
-    }
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'File'
   }],
 
 }, {

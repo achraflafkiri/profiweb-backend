@@ -1,7 +1,6 @@
-// models/file.model.js
+// models/file.model.js - Updated version without folder
 const mongoose = require('mongoose');
 
-// Optional additions if needed later
 const fileSchema = new mongoose.Schema({
   filename: {
     type: String,
@@ -11,14 +10,18 @@ const fileSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  size: {
+    type: String,
+    required: true
+  },
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
-  folder: {
+  project: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Folder',
+    ref: 'Project',
     required: true
   },
 }, {

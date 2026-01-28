@@ -1,7 +1,8 @@
 const express = require("express");
 const {
     createTemplate,
-    getAllTemplates
+    getAllTemplates,
+    deleteTemplate
 } = require("../controllers/templateController");
 const { protect } = require("../middlewares/auth");
 
@@ -13,5 +14,8 @@ router.use(protect);
 router.route("/")
     .post(createTemplate)
     .get(getAllTemplates);
+
+router.route("/:id")
+    .delete(deleteTemplate);
 
 module.exports = router;

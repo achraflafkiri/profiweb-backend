@@ -34,6 +34,7 @@ const createTemplate = catchAsync(async (req, res, next) => {
 
     res.status(201).json({
         status: 'success',
+        message: "The template has been added successfully!",
         data: {
             template: newTemplate
         }
@@ -81,8 +82,27 @@ const getTemplate = catchAsync(async (req, res, next) => {
     });
 });
 
+const deleteTemplate = catchAsync(async (req, res, next) => {
+    const { id } = req.params;
+    
+    // Check if template exists
+    const template = await Template.findById(id);
+    
+    if (!template) {
+        return next(new AppError('Template not found', 404));
+    }
+
+    await Template.findByIdAndDelete(id);
+
+    res.status(200).json({
+        status: 'success',
+        message: 'Template deleted successfully'
+    });
+});
+
 module.exports = {
     createTemplate,
     getAllTemplates,
-    getTemplate
+    getTemplate,
+    deleteTemplate
 };

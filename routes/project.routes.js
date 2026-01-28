@@ -8,7 +8,8 @@ const {
     restoreProject,
     createOrUpdateQuestions,
     getQuestionsByProject,
-    deleteProject
+    deleteProject,
+    updateProject
 } = require("../controllers/projectController");
 const { protect } = require("../middlewares/auth");
 
@@ -24,19 +25,22 @@ router.route("/")
 router.route("/archived")
     .get(getArchivedProjects);
 
-router.route("/:id")
-    .get(getProjectById)
-    .patch(archiveProject)
-    .delete(deleteProject);
+// These specific routes should come BEFORE the general :id route
+router.route("/:id/archived")
+    .patch(archiveProject);
 
 router.route("/:id/restore")
     .patch(restoreProject);
 
-// create question
+// Question routes should also come before the general :id route
 router.route("/:id/questions")
+    .get(getQuestionsByProject)
     .patch(createOrUpdateQuestions);
 
-router.route("/:id/questions")
-    .get(getQuestionsByProject);
+// General project CRUD routes - should come LAST
+router.route("/:id")
+    .get(getProjectById)
+    .patch(updateProject)
+    .delete(deleteProject);
 
 module.exports = router;

@@ -23,4 +23,6 @@ router.post('/users/add', isAdmin, adminController.createUser);
 router.delete('/users/:userId/deactivate', isAdmin, adminController.deactivateUserById);
 router.post('/users/:userId/activate', isAdmin, adminController.activateUserById);
 
+router.delete('/users/:userId/permanent', isSuperAdmin, adminController.deleteUserPermanently);
+
 module.exports = router;
