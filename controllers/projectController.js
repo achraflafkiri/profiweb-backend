@@ -532,7 +532,7 @@ const updateProject = catchAsync(async (req, res, next) => {
     isPublic
   } = req.body;
 
-  // console.log("note ===> ", req.body);
+  // // console.log("note ===> ", req.body);
 
   // Find project
   const project = await Project.findById(id);
@@ -640,8 +640,6 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
   const { id: projectId } = req.params;
   const { questions, projectType, generatePDFs = true } = req.body;
 
-  console.log("Creating/Updating questions for project:", projectId);
-
   // Check if project exists
   const project = await Project.findById(projectId);
   if (!project) {
@@ -673,13 +671,13 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
       isCustom
     } = questionData;
 
-
     if (question === "Selected Template") {
       const template = await Template.findOne({
         title: answer
       });
-      templateStructure = template.structure;
-      // console.log("template ============> ", template.structure);
+      if (template) {
+        templateStructure = template.structure;
+      }
     }
 
     // Handle array answers for multiselect/checkbox types
@@ -691,7 +689,7 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
     // Determine status based on whether answer exists
     const status = processedAnswer && processedAnswer.toString().trim() !== '' ? 'answered' : 'pending';
 
-    // Process options to ensure they have the correct structure
+    // Process options
     let processedOptions = [];
     if (options && Array.isArray(options)) {
       processedOptions = options.map(option => {
@@ -776,28 +774,53 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
   // ===== PDF GENERATION =====
   let pdfResult = null;
   let createdFile = null;
-
-  // console.log("kayn ---------");
+  let createdFolder = null;
 
   if (generatePDFs && savedQuestions.length > 0) {
     try {
       const AIStructorPDFGenerator = require('../utils/aistructorpdfgenerator');
       const File = require("../models/file.model");
+      const Folder = require("../models/folder.model");
 
       // Generate AI Structor PDF
       const aiPdf = await AIStructorPDFGenerator.generateAiInstructions(project, savedQuestions, templateStructure);
 
       // Get all existing file IDs from the project to delete them
       const existingFileIds = project.documents || [];
-      console.log(`📄 Existing file IDs to remove: ${existingFileIds.length}`);
 
       // Delete ALL existing files from File collection
       if (existingFileIds.length > 0) {
         await File.deleteMany({
           _id: { $in: existingFileIds }
         });
-        console.log(`🗑️ COMPLETELY REMOVED ${existingFileIds.length} existing files`);
       }
+
+      // Check if folder exists - FIXED LOGIC
+      const folderName = "Generated instructions pdf";
+      const userId = req.user.id;
+
+      // Try to find existing folder with same name, user, and project
+      let pdfFolder = await Folder.findOne({
+        name: folderName,
+        user: userId,
+        project: projectId,
+      });
+
+      // If folder doesn't exist, create it
+      if (!pdfFolder) {
+        pdfFolder = await Folder.create({
+          name: folderName,
+          user: userId,
+          project: projectId,
+          description: "Folder for generated PDF instructions"
+        });
+        console.log(`✅ Created new folder: "${folderName}" for project ${projectId}`);
+      } else {
+        console.log(`✅ Using existing folder: "${pdfFolder.name}" for project ${projectId}`);
+      }
+
+      // Store the folder ID to use later
+      createdFolder = pdfFolder;
 
       // Create NEW file document in database
       createdFile = await File.create({
@@ -806,10 +829,9 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
         path: aiPdf.path || `uploads/pdfs/${aiPdf.filename}`,
         size: aiPdf.size || 0,
         project: projectId,
-        user: req.user.id,
+        user: userId,
+        folder: pdfFolder._id, // Use the folder ID (either existing or newly created)
       });
-
-      console.log(`✅ NEW PDF file document created with ID: ${createdFile._id}`);
 
       // COMPLETELY REPLACE the documents array with ONLY the new file ID
       await Project.findByIdAndUpdate(
@@ -822,9 +844,6 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
         { new: true }
       );
 
-      console.log(`✅ Project documents array COMPLETELY REPLACED with new file ID: ${createdFile._id}`);
-      console.log(`✅ Project now has EXACTLY 1 document in its array`);
-
       // Simple document object for response
       const document = {
         filename: aiPdf.filename,
@@ -834,8 +853,6 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
         documentId: aiPdf.documentId || `doc_${Date.now()}`,
         fileId: createdFile._id
       };
-
-      console.log(`✅ PDF generated: ${aiPdf.filename}`);
 
       pdfResult = {
         success: true,
@@ -871,7 +888,13 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
         questionsCompletedAt: allAnswered ? new Date() : null,
         pdfsGenerated: pdfResult ? pdfResult.success : false,
         documentsCount: pdfResult && pdfResult.success ? 1 : (project.documents?.length || 0)
-      }
+      },
+      // Include folder info if created
+      folderInfo: createdFolder ? {
+        id: createdFolder._id,
+        name: createdFolder.name,
+        existed: true, // This will be true for existing folders too
+      } : null
     }
   };
 
@@ -883,8 +906,14 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
       file: {
         id: createdFile?._id,
         filename: createdFile?.filename,
-        url: createdFile?.url
+        url: createdFile?.url,
+        folderId: createdFolder?._id
       },
+      folder: createdFolder ? {
+        id: createdFolder._id,
+        name: createdFolder.name,
+        existed: true
+      } : null,
       removedFiles: pdfResult.removedFiles,
       message: pdfResult.message,
       warning: `Removed ${pdfResult.removedFiles} old files, project now has exactly 1 document`
@@ -896,7 +925,6 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
 
   res.status(200).json(response);
 });
-
 
 
 module.exports = {

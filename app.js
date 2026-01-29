@@ -13,6 +13,7 @@ const templatesRouter = require("./routes/template.routes");
 const pdfRouter = require("./routes/pdf.routes");
 const folderRouter = require("./routes/folder.routes");
 const fileRouter = require("./routes/file.routes");
+const uploadRouter = require("./routes/upload.routes");
 
 const handleErrors = require("./middlewares/handleErrors");
 const cors = require("cors");
@@ -66,6 +67,7 @@ app.use("/api/v1/templates", templatesRouter);
 app.use("/api/v1/pdfs", pdfRouter);
 app.use("/api/v1/folders", folderRouter);
 app.use("/api/v1/files", fileRouter);
+app.use("/api/v1/upload", uploadRouter);
 
 // Error handling
 app.use(handleErrors); 

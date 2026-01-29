@@ -48,6 +48,13 @@ const getFolders = catchAsync(async (req, res) => {
     const folders = await Folder.find({
         user: userId
     }).sort({ createdAt: -1 });
+
+    const files = await File.findOne({
+        folder: folders._id
+    });
+
+    console.log("files: ", files);
+    console.log("folders: ", folders);
     
     res.status(200).json({
         status: 'success',
@@ -58,7 +65,20 @@ const getFolders = catchAsync(async (req, res) => {
     });
 });
 
+const getFolderFiles = catchAsync(async (req, res) => {
+    const {folderId} = req.params;
+    const file = await File.findOne({
+        folder: folderId
+    });
+    res.status(200).json({
+        status: "success",
+        data: {file},
+        message: "Fetching folder files successsfully!"
+    })
+});
+
 module.exports = {
     createFolder,
-    getFolders
+    getFolders,
+    getFolderFiles
 };

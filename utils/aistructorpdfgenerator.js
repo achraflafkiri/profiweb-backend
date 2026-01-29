@@ -349,7 +349,7 @@ The AI must not:
     async generateAiInstructions(project, questions, templateStructure) {
         return new Promise(async (resolve, reject) => {
             try {
-                const filename = `instructeur-${Date.now()}.pdf`;
+                const filename = `instructeur-${project._id}.pdf`;
                 const filePath = path.join(this.uploadsDir, filename);
 
                 const doc = new PDFDocument({

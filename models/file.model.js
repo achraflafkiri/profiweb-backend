@@ -24,6 +24,11 @@ const fileSchema = new mongoose.Schema({
     ref: 'Project',
     required: true
   },
+  folder: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Folder',
+    required: false
+  },
 }, {
   timestamps: true
 });
