@@ -18,10 +18,10 @@ const TemplateSchema = new mongoose.Schema({
         maxlength: [200, 'Short description should not exceed 200 characters']
     },
 
-    // CSS Structure/Styling rules
+    // instruction
     structure: {
         type: String,
-        required: [true, 'Template structure is required'],
+        required: [true, 'Template instruction is required'],
         trim: true
     },
 

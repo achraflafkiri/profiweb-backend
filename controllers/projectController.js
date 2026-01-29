@@ -4,6 +4,7 @@ const Client = require("../models/client.model");
 const Question = require("../models/question.model");
 const User = require("../models/user.model");
 const AppError = require("../utils/AppError");
+const Template = require("../models/template.model");
 
 const createProject = catchAsync(async (req, res, next) => {
   const {
@@ -654,6 +655,7 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
 
   // Process each question
   const savedQuestions = [];
+  let templateStructure;
 
   for (const questionData of questions) {
     const {
@@ -670,6 +672,15 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
       settings,
       isCustom
     } = questionData;
+
+
+    if (question === "Selected Template") {
+      const template = await Template.findOne({
+        title: answer
+      });
+      templateStructure = template.structure;
+      // console.log("template ============> ", template.structure);
+    }
 
     // Handle array answers for multiselect/checkbox types
     let processedAnswer = answer;
@@ -762,20 +773,19 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
     }
   );
 
-  // ===== SIMPLE PDF GENERATION =====
+  // ===== PDF GENERATION =====
   let pdfResult = null;
   let createdFile = null;
 
-  console.log("kayn ---------");
+  // console.log("kayn ---------");
 
   if (generatePDFs && savedQuestions.length > 0) {
-    console.log("kayn --------- ohna ??????????????");
     try {
       const AIStructorPDFGenerator = require('../utils/aistructorpdfgenerator');
       const File = require("../models/file.model");
 
       // Generate AI Structor PDF
-      const aiPdf = await AIStructorPDFGenerator.generateAiInstructions(project, savedQuestions);
+      const aiPdf = await AIStructorPDFGenerator.generateAiInstructions(project, savedQuestions, templateStructure);
 
       // Get all existing file IDs from the project to delete them
       const existingFileIds = project.documents || [];
@@ -783,8 +793,8 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
 
       // Delete ALL existing files from File collection
       if (existingFileIds.length > 0) {
-        await File.deleteMany({ 
-          _id: { $in: existingFileIds } 
+        await File.deleteMany({
+          _id: { $in: existingFileIds }
         });
         console.log(`🗑️ COMPLETELY REMOVED ${existingFileIds.length} existing files`);
       }

@@ -20,7 +20,7 @@ class AiStructorPdfGenerator {
         };
         this.CONTENT_PADDING = 20;
         this.HEADER_HEIGHT = 100;
-        
+
         // Professional color scheme
         this.COLORS = {
             primary: '#1a365d',      // Deep blue
@@ -33,20 +33,323 @@ class AiStructorPdfGenerator {
             success: '#2f855a',      // Green for answers
             headerBg: '#1a202c'      // Almost black for header
         };
+
+        // AI Global Instructions
+        this.AI_GLOBAL_INSTRUCTIONS = `
+AI WORK INSTRUCTIONS – WORKING METHODS, LANGUAGE LOGIC, PAGE FLOW
+
+1. Principle
+The AI receives a PDF file containing:
+- All customer information
+- The chosen communication language of the case worker
+- The output languages for the texts (one, two, or three languages)
+- All template codes (T1–Txx) for all pages
+
+The AI always processes data page by page, never across multiple pages.
+
+2. Communication language (case worker)
+The AI communicates exclusively in the language specified in the questionnaire as the internal communication language.
+
+This language is used for:
+- Questions
+- Notes
+- Confirmations ("Yes / No")
+- Status messages
+
+3. Output languages (website texts)
+
+3.1 Basic rule
+- Texts are only output in the languages defined in the questionnaire
+- One, two, or three languages are possible
+
+3.2 Order when using multiple languages (mandatory)
+If multiple languages are selected, the order is fixed and defined once (e.g.):
+1. English
+2. German
+3. French
+
+This order applies:
+- To all texts
+- To all pages
+- Without deviation
+
+3.3 Output format for multiple languages (mandatory)
+The AI outputs field by field, not page by page per language.
+
+Example (3 languages):
+T1 (EN):
+English text
+T1 (DE):
+German text
+T1 (FR):
+French text
+T2 (EN):
+…
+T2 (DE):
+…
+T2 (FR):
+…
+
+Not allowed:
+- Outputting the full page in one language before switching to another language
+
+4. Translation rule (content identity)
+
+4.1 Mandatory rule
+All language versions of a text field must be identical in meaning.
+No shifts in meaning, metaphors, or focus are allowed.
+
+Forbidden:
+- Different statements per language
+- Different idioms or metaphors
+- Different focus areas
+
+4.2 Special case: No meaningful direct translation
+If a literal translation does not exist or is culturally meaningless:
+- The AI creates the best possible meaningful translation
+- The AI sends a notice to the case worker:
+
+NOTICE:
+The translation of Txx was adapted for language [XY]
+because no meaningful direct equivalent exists.
+Please review and approve or provide an alternative.
+
+The AI does not decide independently; it only flags the issue.
+
+5. Page order (mandatory)
+- The AI always starts with the homepage
+- The homepage is created:
+  - Completely
+  - In all output languages
+  - For all T-fields
+
+Only after the homepage is finished may the next page be processed.
+
+6. Completion & approval per page
+After completing a page, the AI asks (in the communication language):
+
+"The page [page name] is fully created.
+Is everything OK?
+Please reply with:
+- YES → Edit next page
+- NO → Report changes"
+
+Rules:
+- YES → Start next page
+- NO → Only correct the reported points
+
+7. Text length & layout stability
+If no text length is specified:
+- The AI selects the ideal length
+- The primary goal is layout stability:
+  - Equal text lengths for adjacent elements
+  - No visual imbalance
+
+Guideline:
+Short and precise texts are preferred over long, layout-breaking texts.
+
+8. Absolute rules
+The AI:
+- Fills only specified T-fields
+- Never changes template codes
+- Never skips fields
+- Never adds extra texts
+
+The AI works:
+- Page by page
+- Structured
+- Reproducible
+
+--------------------------------------------------
+
+AI WORK INSTRUCTIONS – INPUT, INTERPRETATION & HINT LOGIC
+
+0. Purpose
+Defines how the AI interprets customer data and handles missing or contradictory information.
+No layout or design rules are defined here.
+
+1. Inputs
+The AI processes only:
+- Customer questionnaire data
+- Information in any format (bullet points, text, short or long answers)
+
+Rule:
+No external data sources are used.
+
+2. Preliminary review (mandatory)
+Before text creation, the AI checks for:
+
+2.1 Missing information
+If information is missing, display:
+NOTICE – INFORMATION MISSING
+- Missing information: …
+
+2.2 Contradictory information
+If contradictions exist, display:
+NOTICE – OBJECTION
+- Contradictory information: …
+
+Rules:
+- The AI proceeds anyway
+- Uses only consistent data
+- Does not invent facts
+
+3. Interpretation (limited and controlled)
+
+3.1 Basic rule
+Interpretation is allowed only if:
+- Based on customer input
+- Logically comprehensible
+- No new facts are added
+
+Logic:
+Customer input → factual derivation → cautious wording
+
+3.2 Permissible interpretations
+- Long-term activity → "many years of experience"
+- Previous professional exposure → "prior interest / reference"
+- Location + industry → typical fields of application (no references claimed)
+
+3.3 Inadmissible
+The AI must not:
+- Invent achievements or references
+- Exaggerate facts
+- Make potentially untrue claims
+
+4. Creativity (data-driven only)
+Creativity is allowed only in:
+- Language
+- Style
+- Structuring existing information
+- Storytelling based on real data
+
+Not allowed:
+- Marketing promises
+- Superlatives ("leading", "No. 1")
+- Guarantees
+- Strategic goals not stated by the client
+
+5. Tone & text format
+
+5.1 Tone
+If no tone is specified, the AI uses:
+- Professional
+- Neutral
+- Factual
+
+Mandatory notice:
+NOTE – TONALITY NOT DEFINED
+- Standard tone was used.
+
+5.2 Text format
+If not specified, the AI selects an appropriate default and displays:
+NOTE – TEXT FORMAT NOT SET
+- Default format was used.
+
+6. Prohibited actions (absolute)
+The AI must never:
+- Invent content
+- Provide legal assessments
+- State prices or guarantees without data
+- Make competitive comparisons
+- Make strategic decisions
+
+7. Fallback tone
+If no guidance exists:
+- Professional
+- Factual
+- Clear
+- B2B suitable
+- No emotional or colloquial language
+
+--------------------------------------------------
+
+AI WORK INSTRUCTIONS – HANDLING POOR INPUT & CONTRADICTIONS
+
+0. Purpose
+Defines how poor-quality input and contradictions are handled.
+
+1. Poor texts
+
+1.1 Definition
+A text is poor if it is:
+- Empty or meaningless
+- Incoherent
+- Emotionally charged without facts
+- Professionally unusable
+
+1.2 AI behavior
+- No creative "rescue"
+- Use only valid facts
+- Flag the case
+
+Mandatory notice:
+NOTE – QUALITY OF CUSTOMER INPUT
+The submitted text is inadequate.
+Case worker review is recommended.
+
+Minimal neutral output is still generated.
+
+2. Contradictions
+
+2.1 Definition
+Contradictions include:
+- Mutually exclusive statements
+- Conflicting goals
+- Unclear positioning
+
+2.2 AI behavior
+- Identify the contradiction
+- Inform the case worker
+- Propose neutral solution options
+
+2.3 Mandatory notice:
+NOTE – CONTRADICTORY INFORMATION
+Contradictory content detected: [brief description]
+
+3. AI-proposed solutions
+Rules:
+- No decisions
+- No resolution
+- Only objective options
+
+Sources:
+- Official statistics
+- Public industry data
+- Neutral institutions
+
+Format:
+Option A: …
+Option B: …
+
+Solutions appear only in case-worker notes, not customer texts.
+
+4. Boundaries
+The AI may:
+- Inform
+- Structure
+- Suggest options
+
+The AI must not:
+- Decide
+- Define strategy
+- Correct customer intent
+- Resolve contradictions unilaterally
+
+5. Summary logic
+- Poor text → Flag + minimal output
+- Contradiction → Flag + options
+- Decisions → Always human
+`;
     }
 
     /**
      * Generate a professional project information PDF
      */
-    generateAiInstructions(project, questions) {
+    async generateAiInstructions(project, questions, templateStructure) {
         return new Promise(async (resolve, reject) => {
             try {
-                // console.log("📄 PDF Generator called with:");
-                // console.log("   Project ID:", project?._id);
-                // console.log("   Project Title:", project?.title);
-                // console.log("   Questions count:", questions?.length || 0);
-
-                const filename = `ai-structured-${Date.now()}.pdf`;
+                const filename = `instructeur-${Date.now()}.pdf`;
                 const filePath = path.join(this.uploadsDir, filename);
 
                 const doc = new PDFDocument({
@@ -58,24 +361,28 @@ class AiStructorPdfGenerator {
                 const stream = fs.createWriteStream(filePath);
                 doc.pipe(stream);
 
-                // ===== PAGE 1: AI INSTRUCTIONS =====
-                // console.log("📝 Adding AI instructions to page 1...");
-                await this.addProfessionalHeader(doc, 'AI INSTRUCTIONS');
-                this.addAiInstructionsContent(doc);
-
-                // ===== PAGE 2: PROJECT INFORMATION =====
-                // console.log("📝 Adding project information to page 2...");
-                doc.addPage();
+                // ===== PAGE 1: PROJECT INFORMATION =====
                 await this.addProfessionalHeader(doc, 'PROJECT INFORMATION');
                 this.addProjectInformation(doc, project);
 
-                // ===== PAGE 3: QUESTIONS & ANSWERS =====
-                // console.log("📝 Adding questions to page 3...");
+                // ===== PAGE 2+: QUESTIONS & ANSWERS =====
                 doc.addPage();
                 await this.addProfessionalHeader(doc, 'PROJECT QUESTIONS');
                 this.addQuestionsSection(doc, questions);
 
-                // Add page numbers to all pages
+                // ===== NEXT PAGES: AI GLOBAL INSTRUCTIONS =====
+                doc.addPage();
+                await this.addProfessionalHeader(doc, 'AI GLOBAL INSTRUCTIONS');
+                this.addAiGlobalInstructions(doc);
+
+                // ===== LAST PAGES: TEMPLATE STRUCTURE =====
+                if (templateStructure) {
+                    doc.addPage();
+                    await this.addProfessionalHeader(doc, 'TEMPLATE INSTRUCTIONS');
+                    await this.addTemplateStructure(doc, templateStructure);
+                }
+
+                // Add page numbers to all pages (AFTER all content is added)
                 const pageCount = doc.bufferedPageRange().count;
                 for (let i = 0; i < pageCount; i++) {
                     doc.switchToPage(i);
@@ -85,7 +392,6 @@ class AiStructorPdfGenerator {
                 doc.end();
 
                 stream.on('finish', () => {
-                    // console.log("✅ PDF created successfully:", filename);
                     resolve({
                         filename,
                         filePath,
@@ -109,147 +415,331 @@ class AiStructorPdfGenerator {
     }
 
     /**
-     * Add AI Instructions content (PAGE 1)
+     * Add Template Structure content (LAST PAGES)
+     * Header only appears on first page, not on continuation pages
      */
-    addAiInstructionsContent(doc) {
-        const pageWidth = 595.28;
-        const contentWidth = pageWidth - this.PAGE_MARGIN.left - this.PAGE_MARGIN.right;
-
-        // Main title
-        doc.fontSize(20)
-            .font('Helvetica-Bold')
-            .fillColor(this.COLORS.primary)
-            .text('AI INSTRUCTIONS', {
-                align: 'center',
-                width: contentWidth
-            });
-
-        doc.moveDown(2);
-
-        // Section 1: Role of AI
-        this.addSectionHeader(doc, '1. Role of AI', contentWidth);
-        doc.moveDown(0.8);
-
-        doc.fontSize(11)
-            .font('Helvetica')
-            .fillColor(this.COLORS.text)
-            .text('You are a rules-based content generator for websites. You do not make your own decisions and do not add any content that does not come from the information sheet. You work strictly according to these instructions.', {
-                align: 'left',
-                width: contentWidth,
-                lineGap: 4
-            });
-
-        doc.moveDown(2);
-
-        // Divider line
-        doc.moveTo(this.PAGE_MARGIN.left, doc.y)
-            .lineTo(this.PAGE_MARGIN.left + contentWidth, doc.y)
-            .lineWidth(0.5)
-            .strokeColor(this.COLORS.border)
-            .stroke();
-
-        doc.moveDown(2);
-
-        // Section 2: General rules
-        this.addSectionHeader(doc, '2. General rules (mandatory)', contentWidth);
-        doc.moveDown(0.8);
-
-        const rules = [
-            '1. Use only the information from the information sheet.',
-            '2. Make no assumptions, additions, or interpretations.',
-            '3. Do not use marketing claims (e.g., "leading", "best", "No. 1").',
-            '4. Write objectively, professionally, and clearly.',
-            '5. If information is missing or unclear: → STOP and report:\n   **INFORMATION MISSING - please add it.**'
-        ];
-
-        rules.forEach(rule => {
-            const bulletY = doc.y;
-            
-            // Bullet point
-            doc.circle(this.PAGE_MARGIN.left + 5, bulletY + 6, 3)
-                .fillColor(this.COLORS.accent)
-                .fill();
-
-            // Rule text
-            doc.fontSize(11)
-                .font('Helvetica')
-                .fillColor(this.COLORS.text)
-                .text(rule,
-                    this.PAGE_MARGIN.left + 20,
-                    bulletY,
-                    {
-                        width: contentWidth - 25,
-                        lineGap: 3
-                    });
-
-            doc.moveDown(0.6);
-        });
-
-        doc.moveDown(2);
-
-        // Divider line
-        doc.moveTo(this.PAGE_MARGIN.left, doc.y)
-            .lineTo(this.PAGE_MARGIN.left + contentWidth, doc.y)
-            .lineWidth(0.5)
-            .strokeColor(this.COLORS.border)
-            .stroke();
-
-        doc.moveDown(2);
-
-        // Section 3: Working methods
-        this.addSectionHeader(doc, '3. Working methods (very important)', contentWidth);
-        doc.moveDown(0.8);
-
-        const methods = [
-            '- You always work page by page.',
-            '- You only ever create one page completely.',
-            '- After each page, you wait for approval from the operator.',
-            '- You only continue working after receiving positive feedback.'
-        ];
-
-        methods.forEach(method => {
-            const bulletY = doc.y;
-            
-            // Dash bullet
-            doc.fontSize(11)
-                .font('Helvetica-Bold')
-                .fillColor(this.COLORS.accent)
-                .text('•', this.PAGE_MARGIN.left + 5, bulletY, {
-                    width: 10
+    async addTemplateStructure(doc, templateStructure) {
+        if (!templateStructure) {
+            doc.fontSize(12)
+                .fillColor(this.COLORS.textLight)
+                .text('No template structure available.', {
+                    align: 'center'
                 });
+            return;
+        }
 
-            // Method text
-            doc.fontSize(11)
-                .font('Helvetica')
-                .fillColor(this.COLORS.text)
-                .text(method,
-                    this.PAGE_MARGIN.left + 20,
-                    bulletY,
-                    {
-                        width: contentWidth - 25,
-                        lineGap: 3
+        const pageWidth = 595.28;
+        const pageHeight = 841.89;
+        const contentWidth = pageWidth - this.PAGE_MARGIN.left - this.PAGE_MARGIN.right;
+        const maxY = pageHeight - this.PAGE_MARGIN.bottom - 40;
+
+        // Convert template structure to string if it's an object
+        const templateText = typeof templateStructure === 'string' 
+            ? templateStructure 
+            : JSON.stringify(templateStructure, null, 2);
+
+        const lines = templateText.split('\n');
+
+        for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+            const line = lines[lineIndex];
+            
+            // Check if we need a new page
+            if (doc.y > maxY) {
+                doc.addPage();
+                // Don't add header on continuation pages - just reset position
+                doc.x = this.PAGE_MARGIN.left;
+                doc.y = this.PAGE_MARGIN.top + 20;
+            }
+
+            const trimmedLine = line.trim();
+            
+            // Skip completely empty lines but add spacing
+            if (!trimmedLine) {
+                doc.moveDown(0.2);
+                continue;
+            }
+
+            // Detect different line types and format accordingly
+            
+            // Page/Template headers (e.g., "TEMPLATE 1 (Page 1: HOME)")
+            if (trimmedLine.startsWith('TEMPLATE') && trimmedLine.includes('Page')) {
+                doc.moveDown(1);
+                const headerY = doc.y;
+                const headerHeight = 35;
+                
+                // Background
+                doc.roundedRect(this.PAGE_MARGIN.left, headerY, contentWidth, headerHeight, 5)
+                    .fillColor(this.COLORS.primary)
+                    .fill();
+                
+                // Text
+                doc.fontSize(14)
+                    .font('Helvetica-Bold')
+                    .fillColor('#ffffff')
+                    .text(trimmedLine, 
+                        this.PAGE_MARGIN.left + 15, 
+                        headerY + 10, 
+                        {
+                            width: contentWidth - 30,
+                            align: 'left'
+                        });
+                
+                doc.y = headerY + headerHeight;
+                doc.moveDown(0.8);
+            }
+            // Main property keys (e.g., "template:", "fill_policy:", "sections:")
+            else if (/^[a-z_]+:$/i.test(trimmedLine) && !trimmedLine.includes(' ')) {
+                doc.moveDown(0.5);
+                doc.fontSize(11)
+                    .font('Helvetica-Bold')
+                    .fillColor(this.COLORS.secondary)
+                    .text(trimmedLine, this.PAGE_MARGIN.left + 5, doc.y, {
+                        width: contentWidth - 10
                     });
-
-            doc.moveDown(0.5);
-        });
-
-        doc.moveDown(3);
+                doc.moveDown(0.3);
+            }
+            // List items with dash
+            else if (trimmedLine.startsWith('-')) {
+                const bulletY = doc.y;
+                const indent = (line.length - line.trimLeft().length) / 2;
+                
+                // Bullet point
+                doc.circle(this.PAGE_MARGIN.left + 15 + indent, bulletY + 5, 2)
+                    .fillColor(this.COLORS.accent)
+                    .fill();
+                
+                // Text
+                doc.fontSize(9)
+                    .font('Helvetica')
+                    .fillColor(this.COLORS.text)
+                    .text(trimmedLine.substring(1).trim(), 
+                        this.PAGE_MARGIN.left + 25 + indent, 
+                        bulletY, 
+                        {
+                            width: contentWidth - 30 - indent,
+                            lineGap: 1
+                        });
+                doc.moveDown(0.2);
+            }
+            // Property with value (e.g., "id: 'T1'", "role: 'Hero Headline'")
+            else if (trimmedLine.includes(':') && !trimmedLine.endsWith(':')) {
+                const indent = (line.length - line.trimLeft().length) / 2;
+                const [key, ...valueParts] = trimmedLine.split(':');
+                const value = valueParts.join(':').trim();
+                
+                doc.fontSize(9)
+                    .font('Helvetica-Bold')
+                    .fillColor(this.COLORS.text)
+                    .text(`${key}:`, 
+                        this.PAGE_MARGIN.left + 10 + indent, 
+                        doc.y, 
+                        { 
+                            continued: true,
+                            width: contentWidth - 15 - indent
+                        })
+                    .font('Helvetica')
+                    .fillColor(this.COLORS.textLight)
+                    .text(` ${value}`);
+                
+                doc.moveDown(0.15);
+            }
+            // Regular text or description
+            else {
+                const indent = (line.length - line.trimLeft().length) / 2;
+                doc.fontSize(9)
+                    .font('Helvetica')
+                    .fillColor(this.COLORS.text)
+                    .text(trimmedLine, 
+                        this.PAGE_MARGIN.left + 10 + indent, 
+                        doc.y, 
+                        {
+                            width: contentWidth - 15 - indent,
+                            lineGap: 1
+                        });
+                doc.moveDown(0.15);
+            }
+        }
 
         // Footer note
-        // doc.fontSize(9)
-        //     .font('Helvetica-Oblique')
-        //     .fillColor(this.COLORS.textLight)
-        //     .text('These instructions are binding and must be followed for all content generation →',
-        //         this.PAGE_MARGIN.left,
-        //         750,
-        //         {
-        //             width: contentWidth,
-        //             align: 'right'
-        //         });
+        doc.moveDown(2);
+        doc.fontSize(9)
+            .font('Helvetica-Oblique')
+            .fillColor(this.COLORS.textLight)
+            .text('This template structure defines the layout and content fields for the website.',
+                this.PAGE_MARGIN.left,
+                doc.y,
+                {
+                    width: contentWidth,
+                    align: 'center'
+                });
     }
 
     /**
-     * Add professional project information section (PAGE 2)
+     * Add AI Global Instructions content (MIDDLE PAGES)
+     */
+    addAiGlobalInstructions(doc) {
+        const pageWidth = 595.28;
+        const pageHeight = 841.89;
+        const contentWidth = pageWidth - this.PAGE_MARGIN.left - this.PAGE_MARGIN.right;
+        const maxY = pageHeight - this.PAGE_MARGIN.bottom - 40; // Leave space for page numbers
+
+        // Split the instructions into sections
+        const sections = this.AI_GLOBAL_INSTRUCTIONS.trim().split('--------------------------------------------------');
+
+        sections.forEach((section, sectionIndex) => {
+            if (!section.trim()) return;
+
+            // Check if we need a new page before starting a new section
+            if (doc.y > maxY - 100) {
+                doc.addPage();
+                doc.x = this.PAGE_MARGIN.left;
+                doc.y = this.PAGE_MARGIN.top + 20;
+            }
+
+            const lines = section.trim().split('\n');
+            
+            lines.forEach((line, lineIndex) => {
+                // Check if we need a new page
+                if (doc.y > maxY) {
+                    doc.addPage();
+                    doc.x = this.PAGE_MARGIN.left;
+                    doc.y = this.PAGE_MARGIN.top + 20;
+                }
+
+                const trimmedLine = line.trim();
+                
+                // Skip empty lines but add small spacing
+                if (!trimmedLine) {
+                    doc.moveDown(0.3);
+                    return;
+                }
+
+                // Main section title (starts with "AI WORK INSTRUCTIONS")
+                if (trimmedLine.startsWith('AI WORK INSTRUCTIONS')) {
+                    doc.moveDown(0.5);
+                    doc.fontSize(16)
+                        .font('Helvetica-Bold')
+                        .fillColor(this.COLORS.primary)
+                        .text(trimmedLine, this.PAGE_MARGIN.left, doc.y, {
+                            width: contentWidth,
+                            align: 'left'
+                        });
+                    doc.moveDown(1);
+                }
+                // Major numbered sections (e.g., "1. Principle", "2. Communication language")
+                else if (/^\d+\.\s+[A-Z]/.test(trimmedLine)) {
+                    doc.moveDown(0.8);
+                    
+                    // Add subtle background for section headers
+                    const headerY = doc.y;
+                    const headerHeight = 30;
+                    
+                    doc.roundedRect(this.PAGE_MARGIN.left, headerY, contentWidth, headerHeight, 4)
+                        .fillColor(this.COLORS.background)
+                        .fill();
+                    
+                    // Left accent bar
+                    doc.rect(this.PAGE_MARGIN.left, headerY, 4, headerHeight)
+                        .fillColor(this.COLORS.accent)
+                        .fill();
+                    
+                    doc.fontSize(13)
+                        .font('Helvetica-Bold')
+                        .fillColor(this.COLORS.secondary)
+                        .text(trimmedLine, 
+                            this.PAGE_MARGIN.left + 15, 
+                            headerY + 8, 
+                            {
+                                width: contentWidth - 20,
+                                align: 'left'
+                            });
+                    
+                    doc.y = headerY + headerHeight;
+                    doc.moveDown(0.5);
+                }
+                // Sub-sections (e.g., "3.1 Basic rule", "4.2 Special case")
+                else if (/^\d+\.\d+\s+/.test(trimmedLine)) {
+                    doc.moveDown(0.6);
+                    doc.fontSize(11)
+                        .font('Helvetica-Bold')
+                        .fillColor(this.COLORS.text)
+                        .text(trimmedLine, this.PAGE_MARGIN.left + 10, doc.y, {
+                            width: contentWidth - 10,
+                            align: 'left',
+                            indent: 0
+                        });
+                    doc.moveDown(0.4);
+                }
+                // Bullet points or list items
+                else if (trimmedLine.startsWith('-')) {
+                    const bulletY = doc.y;
+                    
+                    // Bullet point
+                    doc.circle(this.PAGE_MARGIN.left + 15, bulletY + 6, 2.5)
+                        .fillColor(this.COLORS.accent)
+                        .fill();
+                    
+                    // Text
+                    doc.fontSize(10)
+                        .font('Helvetica')
+                        .fillColor(this.COLORS.text)
+                        .text(trimmedLine.substring(1).trim(), 
+                            this.PAGE_MARGIN.left + 25, 
+                            bulletY, 
+                            {
+                                width: contentWidth - 30,
+                                lineGap: 2
+                            });
+                    doc.moveDown(0.3);
+                }
+                // Special sections (e.g., "Rule:", "Logic:", "Example", "Not allowed:", "Forbidden:")
+                else if (trimmedLine.endsWith(':')) {
+                    doc.moveDown(0.4);
+                    doc.fontSize(10)
+                        .font('Helvetica-Bold')
+                        .fillColor(this.COLORS.secondary)
+                        .text(trimmedLine, this.PAGE_MARGIN.left + 10, doc.y, {
+                            width: contentWidth - 10,
+                            align: 'left'
+                        });
+                    doc.moveDown(0.3);
+                }
+                // Regular paragraph text
+                else {
+                    doc.fontSize(10)
+                        .font('Helvetica')
+                        .fillColor(this.COLORS.text)
+                        .text(trimmedLine, this.PAGE_MARGIN.left + 10, doc.y, {
+                            width: contentWidth - 10,
+                            align: 'left',
+                            lineGap: 3
+                        });
+                    doc.moveDown(0.2);
+                }
+            });
+
+            // Add extra space between major sections
+            if (sectionIndex < sections.length - 1) {
+                doc.moveDown(1.5);
+            }
+        });
+
+        // Footer note at bottom of last AI instructions page
+        doc.moveDown(2);
+        doc.fontSize(9)
+            .font('Helvetica-Oblique')
+            .fillColor(this.COLORS.textLight)
+            .text('These AI instructions are binding and must be followed for all content generation tasks.',
+                this.PAGE_MARGIN.left,
+                doc.y,
+                {
+                    width: contentWidth,
+                    align: 'center'
+                });
+    }
+
+    /**
+     * Add professional project information section (PAGE 1)
      */
     addProjectInformation(doc, project) {
         if (!project) {
@@ -365,7 +855,7 @@ class AiStructorPdfGenerator {
             doc.moveDown(0.6);
         });
 
-        // Add footer note for page 2
+        // Add footer note for page 1
         doc.fontSize(9)
             .font('Helvetica-Oblique')
             .fillColor(this.COLORS.textLight)
@@ -379,7 +869,7 @@ class AiStructorPdfGenerator {
     }
 
     /**
-     * Add questions section (PAGE 3+)
+     * Add questions section (PAGE 2+)
      */
     addQuestionsSection(doc, questions) {
         const pageWidth = 595.28;
@@ -426,7 +916,7 @@ class AiStructorPdfGenerator {
                 // Question card
                 const cardY = doc.y;
                 const questionHeight = this.calculateQuestionHeight(doc, question, contentWidth);
-                
+
                 // Card background
                 doc.roundedRect(this.PAGE_MARGIN.left, cardY, contentWidth, questionHeight, 5)
                     .fillColor('#ffffff')
@@ -460,7 +950,7 @@ class AiStructorPdfGenerator {
                 const answerY = cardY + 38;
 
                 // Handle different answer types
-                if (question.type === 'brand-colors' || 
+                if (question.type === 'brand-colors' ||
                     (question.answer && question.answer.includes('#'))) {
                     this.displayBrandColorsProfessional(doc, question.answer, answerY, contentWidth);
                 } else {
@@ -621,8 +1111,6 @@ class AiStructorPdfGenerator {
         return new Promise((resolve, reject) => {
             const protocol = url.startsWith('https') ? https : http;
 
-            // // console.log(`⬇️ Downloading logo from: ${url}`);
-
             protocol.get(url, (response) => {
                 if (response.statusCode !== 200) {
                     console.error(`❌ Failed to download image: ${response.statusCode}`);
@@ -634,7 +1122,6 @@ class AiStructorPdfGenerator {
                 response.on('data', (chunk) => chunks.push(chunk));
                 response.on('end', () => {
                     const buffer = Buffer.concat(chunks);
-                    // console.log(`✅ Logo downloaded successfully (${buffer.length} bytes)`);
                     resolve(buffer);
                 });
             }).on('error', (error) => {
@@ -675,8 +1162,6 @@ class AiStructorPdfGenerator {
                 width: logoWidth,
                 height: logoHeight
             });
-
-            // console.log('✅ Logo added to PDF header');
         } catch (error) {
             console.warn('⚠️ Could not load logo:', error.message);
 
@@ -710,7 +1195,7 @@ class AiStructorPdfGenerator {
     addPageNumber(doc, currentPage, totalPages) {
         const pageHeight = 841.89;
         const pageWidth = 595.28;
-        
+
         doc.fontSize(9)
             .font('Helvetica')
             .fillColor(this.COLORS.textLight)
