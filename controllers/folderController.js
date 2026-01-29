@@ -67,7 +67,7 @@ const getFolders = catchAsync(async (req, res) => {
 
 const getFolderFiles = catchAsync(async (req, res) => {
     const {folderId} = req.params;
-    const file = await File.findOne({
+    const file = await File.find({
         folder: folderId
     });
     res.status(200).json({

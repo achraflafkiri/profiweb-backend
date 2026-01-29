@@ -25,7 +25,7 @@ const createUploadsSubdirs = () => {
 };
 createUploadsSubdirs();
 
-// Configure storage
+// Configure storage - SIMPLIFIED VERSION
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         let folder = 'others';
@@ -55,7 +55,12 @@ const storage = multer.diskStorage({
     filename: function (req, file, cb) {
         const uniqueId = uuidv4();
         const extension = path.extname(file.originalname);
-        const filename = `${path.basename(file.originalname, extension)}-${uniqueId}${extension}`;
+        // Clean filename but keep the original name structure
+        const cleanName = path.basename(file.originalname, extension)
+            .replace(/[^\w\s.-]/gi, '') // Remove special characters except dots and hyphens
+            .replace(/\s+/g, '-') // Replace spaces with hyphens
+            .toLowerCase();
+        const filename = `${cleanName}-${uniqueId}${extension}`;
         cb(null, filename);
     }
 });
@@ -79,19 +84,77 @@ const upload = multer({
 // Upload multiple files middleware
 const uploadFiles = upload.array('files', 10);
 
-// Get file info
+// Get file info - FIXED AND SIMPLIFIED VERSION
 const getFileInfo = (file, projectId) => {
+    // Get the folder name from the destination (e.g., 'pdfs', 'images', etc.)
+    const folderName = path.basename(file.destination);
+    
+    // Construct consistent relative path: "pdfs/filename.pdf"
+    const relativePath = `${folderName}/${file.filename}`;
+    
+    // Construct URL path: "/uploads/pdfs/filename.pdf"
+    const urlPath = `/uploads/${relativePath}`;
+    
     return {
         originalName: file.originalname,
         filename: file.filename,
-        path: file.path,
+        path: urlPath, // Store as "pdfs/filename.pdf"
         size: file.size,
-        mimetype: file.mimetype,
-        destination: file.destination,
-        url: `/uploads/${path.relative(uploadsDir, file.path).replace(/\\/g, '/')}`,
+        url: urlPath, // This is for accessing the file: "/uploads/pdfs/filename.pdf"
         projectId: projectId,
         uploadedAt: new Date()
     };
+};
+
+// Function to clean existing absolute paths to relative paths
+const normalizePath = (filePath) => {
+    if (!filePath || typeof filePath !== 'string') {
+        return null;
+    }
+    
+    // If it's already a relative path like "pdfs/filename.pdf", return as is
+    if (!path.isAbsolute(filePath) && !filePath.includes(':')) {
+        return filePath.replace(/\\/g, '/');
+    }
+    
+    // If it contains the uploads directory, extract relative part
+    if (filePath.includes('uploads')) {
+        // Find the position after "uploads"
+        const uploadsIndex = filePath.indexOf('uploads');
+        if (uploadsIndex !== -1) {
+            // Get everything after "uploads/" including the slash
+            const afterUploads = filePath.substring(uploadsIndex + 'uploads'.length);
+            // Remove leading slashes or backslashes
+            const cleanPath = afterUploads.replace(/^[\\\/]+/, '');
+            return cleanPath.replace(/\\/g, '/');
+        }
+    }
+    
+    // If it's an absolute path but doesn't contain "uploads", try to make it relative to uploadsDir
+    if (path.isAbsolute(filePath)) {
+        try {
+            const relative = path.relative(uploadsDir, filePath);
+            return relative.replace(/\\/g, '/');
+        } catch (error) {
+            console.error('Error converting absolute path:', error);
+            return null;
+        }
+    }
+    
+    return filePath;
+};
+
+// Function to get URL from stored path
+const getFileUrl = (storedPath) => {
+    if (!storedPath) return null;
+    
+    // If path is already a full URL or starts with /uploads, return as is
+    if (storedPath.startsWith('/uploads/') || storedPath.startsWith('http')) {
+        return storedPath;
+    }
+    
+    // If path is like "pdfs/filename.pdf", prepend "/uploads/"
+    return `/uploads/${storedPath.replace(/\\/g, '/')}`;
 };
 
 // Delete file from local storage
@@ -102,7 +165,25 @@ const deleteFileLocally = async (filePath) => {
             return false;
         }
 
-        const absolutePath = path.isAbsolute(filePath) ? filePath : path.join(uploadsDir, filePath);
+        let absolutePath;
+        
+        // If it's a relative path like "pdfs/filename.pdf", join with uploadsDir
+        if (!path.isAbsolute(filePath) && !filePath.includes(':')) {
+            // Handle paths like "pdfs/filename.pdf"
+            absolutePath = path.join(uploadsDir, filePath);
+        } else if (filePath.includes('uploads')) {
+            // Handle paths that contain "uploads" in them
+            const normalized = normalizePath(filePath);
+            if (normalized) {
+                absolutePath = path.join(uploadsDir, normalized);
+            } else {
+                // If we can't normalize, try to use as absolute path
+                absolutePath = filePath;
+            }
+        } else {
+            // Assume it's an absolute path
+            absolutePath = filePath;
+        }
         
         // Check if file exists
         if (!fs.existsSync(absolutePath)) {
@@ -120,8 +201,36 @@ const deleteFileLocally = async (filePath) => {
     }
 };
 
+// Helper function to get absolute path from stored path
+const getAbsolutePath = (storedPath) => {
+    if (!storedPath) return null;
+    
+    // If it's already absolute, return as is
+    if (path.isAbsolute(storedPath)) {
+        return storedPath;
+    }
+    
+    // If it's a relative path like "pdfs/filename.pdf", join with uploadsDir
+    if (!storedPath.includes(':')) {
+        return path.join(uploadsDir, storedPath.replace(/\//g, path.sep));
+    }
+    
+    // If it contains "uploads", try to normalize it
+    if (storedPath.includes('uploads')) {
+        const normalized = normalizePath(storedPath);
+        if (normalized) {
+            return path.join(uploadsDir, normalized.replace(/\//g, path.sep));
+        }
+    }
+    
+    return storedPath;
+};
+
 module.exports = {
     uploadFiles,
     getFileInfo,
-    deleteFileLocally
+    normalizePath,
+    deleteFileLocally,
+    getAbsolutePath,
+    getFileUrl
 };
