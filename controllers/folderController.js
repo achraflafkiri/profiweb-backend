@@ -53,8 +53,8 @@ const getFolders = catchAsync(async (req, res) => {
         folder: folders._id
     });
 
-    console.log("files: ", files);
-    console.log("folders: ", folders);
+    // console.log("files: ", files);
+    // console.log("folders: ", folders);
     
     res.status(200).json({
         status: 'success',

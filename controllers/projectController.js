@@ -822,27 +822,40 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
       // Store the folder ID to use later
       createdFolder = pdfFolder;
 
-      // Create NEW file document in database
-      createdFile = await File.create({
-        filename: aiPdf.filename,
-        originalFilename: aiPdf.filename,
-        path: aiPdf.path || `uploads/pdfs/${aiPdf.filename}`,
-        size: aiPdf.size || 0,
+      console.log("pdfFolder._id: ", pdfFolder._id)
+
+      // Check if file exists with same filename, user, path, user, project, folder
+      const fileExisting = await File.findOne({
         project: projectId,
         user: userId,
-        folder: pdfFolder._id, // Use the folder ID (either existing or newly created)
+        folder: pdfFolder._id,
       });
 
+      console.log("!fileExisting ==> ", !fileExisting);
+
+      // Create NEW file document in database
+      if (!fileExisting) {
+        createdFile = await File.create({
+          filename: aiPdf.filename,
+          path: aiPdf.path || `uploads/pdfs/${aiPdf.filename}`,
+          project: projectId,
+          user: userId,
+          folder: pdfFolder._id,
+        });
+      }
+
+      console.log("createdFile._id: ", createdFile);
+
       // COMPLETELY REPLACE the documents array with ONLY the new file ID
-      await Project.findByIdAndUpdate(
-        projectId,
-        {
-          $set: {
-            documents: [createdFile._id]  // ONLY the new file, remove ALL others
-          }
-        },
-        { new: true }
-      );
+      // await Project.findByIdAndUpdate(
+      //   projectId,
+      //   {
+      //     $set: {
+      //       documents: [createdFile._id]  // ONLY the new file, remove ALL others
+      //     }
+      //   },
+      //   { new: true }
+      // );
 
       // Simple document object for response
       const document = {
@@ -851,7 +864,6 @@ const createOrUpdateQuestions = catchAsync(async (req, res, next) => {
         type: 'ai-structured',
         generatedAt: new Date(),
         documentId: aiPdf.documentId || `doc_${Date.now()}`,
-        fileId: createdFile._id
       };
 
       pdfResult = {

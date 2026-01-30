@@ -12,7 +12,7 @@ const fileSchema = new mongoose.Schema({
   },
   size: {
     type: String,
-    required: true
+    required: false
   },
   user: {
     type: mongoose.Schema.Types.ObjectId,

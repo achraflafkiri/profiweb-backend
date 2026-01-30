@@ -48,7 +48,7 @@ app.use(bodyParser.json());
 
 // ===== ADD THIS: Serve static files from uploads directory =====
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-console.log('📁 Static files served from:', path.join(__dirname, 'uploads'));
+// console.log('📁 Static files served from:', path.join(__dirname, 'uploads'));
 // ===== END OF ADDITION =====
 
 // Connect to database
